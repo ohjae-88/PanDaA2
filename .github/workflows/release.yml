@@ -87,11 +87,10 @@ jobs:
             exit 1
           fi
           echo "Signing: $exe"
-          # base64 인코딩된 키 그대로 임시 파일에 기록 (signer sign -k 는 base64 파일 기대)
-          printf '%s' "$TAURI_SIGNING_PRIVATE_KEY" > /tmp/signing.key
-          # 서명 실행 (비밀번호 없음)
-          npx @tauri-apps/cli signer sign -k /tmp/signing.key "$exe"
-          rm -f /tmp/signing.key
+          # CLI 도움말 확인
+          npx @tauri-apps/cli signer sign --help || true
+          # 환경변수로 키 직접 전달 (파일 경유 없음)
+          npx @tauri-apps/cli signer sign --private-key "$TAURI_SIGNING_PRIVATE_KEY" "$exe"
           echo "Signature created: ${exe}.sig"
           ls -la "${exe}.sig"
 
