@@ -35,6 +35,6 @@ export async function toggleWindowVisibility(): Promise<void> {
 
 export async function getAppVersion(): Promise<string> {
   const invoke = await getInvoke();
-  if (!invoke) return "5.4.0 (browser)";
+  if (!invoke) return "5.5.0 (browser)";
   return invoke<string>("app_version");
 }

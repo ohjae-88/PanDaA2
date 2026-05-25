@@ -614,7 +614,8 @@ pub fn run() {
                             return; // 정상 종료 진행 — prevent_close 스킵
                         }
                         api.prevent_close();
-                        let _ = h.emit("window-close-requested", "main");
+                        // emit_to("main") — 메인 윈도우에만 전송 (오버레이 브로드캐스트 차단)
+                        let _ = h.emit_to("main", "window-close-requested", "main");
                     }
                 });
             }
