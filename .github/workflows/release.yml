@@ -87,8 +87,8 @@ jobs:
             exit 1
           fi
           echo "Signing: $exe"
-          # base64 디코딩 → minisign key 텍스트 형식으로 임시 파일 작성
-          echo "$TAURI_SIGNING_PRIVATE_KEY" | base64 -d > /tmp/signing.key
+          # base64 인코딩된 키 그대로 임시 파일에 기록 (signer sign -k 는 base64 파일 기대)
+          printf '%s' "$TAURI_SIGNING_PRIVATE_KEY" > /tmp/signing.key
           # 서명 실행 (비밀번호 없음)
           npx @tauri-apps/cli signer sign -k /tmp/signing.key "$exe"
           rm -f /tmp/signing.key
