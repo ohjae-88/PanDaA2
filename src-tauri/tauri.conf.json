@@ -35,6 +35,12 @@
   "plugins": {
     "shell": {
       "open": true
+    },
+    "updater": {
+      "pubkey": "RWTOyLzXuC9wC740Yd59N/pBOa61Uo77EkYZUYGLvs7oaYgN0O9dQSlY",
+      "endpoints": [
+        "https://github.com/ohjae-88/PanDaA2/releases/latest/download/latest.json"
+      ]
     }
   },
   "bundle": {

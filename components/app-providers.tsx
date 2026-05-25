@@ -7,6 +7,7 @@ import { HotkeyRuntime } from "@/components/hotkey-runtime";
 import { CloseConfirmDialog } from "@/components/close-confirm-dialog";
 import { SecondInstanceDialog } from "@/components/second-instance-dialog";
 import { NotifierTickRunner } from "@/components/notifier/notifier-tick-runner";
+import { UpdateCheckProvider } from "@/components/update-check-provider";
 
 /**
  * 앱 전역 Provider — pathname에 따라 경량화.
@@ -35,6 +36,7 @@ export function AppProviders() {
       <CloseConfirmDialog />
       <SecondInstanceDialog />
       <NotifierTickRunner />
+      <UpdateCheckProvider />
     </>
   );
 }

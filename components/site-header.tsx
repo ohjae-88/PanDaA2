@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, RefreshCw } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -14,6 +14,7 @@ import { UnifiedButton } from "@/components/unified/unified-button";
 import { OverlayToggleButton } from "@/components/overlay/overlay-toggle-button";
 import { MainScaleControl } from "@/components/main-scale-control";
 import { cn } from "@/lib/utils";
+import { useUpdateStore } from "@/lib/util/update-store";
 
 type NavCategory = {
   key: string;
@@ -79,6 +80,7 @@ const CATEGORIES: NavCategory[] = [
 export function SiteHeader() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const { check, checking, info, openDialog } = useUpdateStore();
 
   // 오버레이 윈도우 경로에서는 헤더 숨김
   if (pathname?.startsWith("/overlay/window/")) return null;
@@ -97,8 +99,32 @@ export function SiteHeader() {
         <Link href="/dashboard" className="flex items-center gap-2 font-bold">
           <span className="text-xl">🐼</span>
           <span>판다의 A2</span>
-          <span className="text-xs text-muted-foreground font-normal">Ver.5.4.0</span>
         </Link>
+        <button
+          type="button"
+          onClick={() => info?.available ? openDialog() : check(false)}
+          disabled={checking}
+          title={
+            info?.available
+              ? `새 버전 v${info.newVersion} 클릭하여 설치`
+              : "업데이트 확인"
+          }
+          className={cn(
+            "relative flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-normal transition-colors",
+            "hover:bg-accent/20 disabled:opacity-60",
+            info?.available
+              ? "text-emerald-500 dark:text-emerald-400"
+              : "text-muted-foreground"
+          )}
+        >
+          <RefreshCw
+            className={cn("h-3 w-3", checking && "animate-spin")}
+          />
+          <span>Ver.5.4.0</span>
+          {info?.available && (
+            <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-emerald-500 ring-1 ring-background" />
+          )}
+        </button>
 
         <div className="mx-2 h-6 w-px bg-border" />
 
