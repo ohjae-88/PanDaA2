@@ -136,7 +136,9 @@ jobs:
           exe_name="${{ steps.artifacts.outputs.exe_name }}"
           sig=$(cat "${{ steps.artifacts.outputs.sig_path }}")
           pub_date=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-          download_url="https://github.com/${GITHUB_REPOSITORY}/releases/download/v${version}/${exe_name}"
+          # 한글 파일명 → URL 인코딩 (Tauri updater가 raw 한글 URL로 404 반환하는 문제 방지)
+          exe_encoded=$(python3 -c "import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1]))" "$exe_name")
+          download_url="https://github.com/${GITHUB_REPOSITORY}/releases/download/v${version}/${exe_encoded}"
           cat > latest.json <<EOF
           {
             "version": "${version}",
