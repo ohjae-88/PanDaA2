@@ -30,10 +30,14 @@ export function CloseConfirmDialog() {
     let unlisten: (() => void) | undefined;
     (async () => {
       try {
+        // 현재 윈도우 레이블 확인 — "main"이 아니면 리스너 자체 등록 안 함.
+        // overlay 윈도우에서 CloseConfirmDialog가 렌더링되어도 절대 열리지 않도록.
+        const winMod = await import("@tauri-apps/api/window");
+        if (winMod.getCurrentWindow().label !== "main") return;
+
         const mod = await import("@tauri-apps/api/event");
-        const unsub = await mod.listen<string>("window-close-requested", (e) => {
-          // main 윈도우에서만 다이얼로그 표시 (overlay는 Rust에서 직접 처리)
-          if (e.payload === "main") setOpen(true);
+        const unsub = await mod.listen<string>("window-close-requested", () => {
+          setOpen(true);
         });
         unlisten = unsub;
       } catch (err) {
