@@ -190,16 +190,10 @@ async fn open_overlay(app: tauri::AppHandle) -> Result<(), String> {
         let h = win.clone();
         let app_handle = app.clone();
         win.on_window_event(move |event| {
-            if let WindowEvent::CloseRequested { api, .. } = event {
-                let exiting = app_handle
-                    .try_state::<ExitFlag>()
-                    .map(|f| f.0.load(Ordering::SeqCst))
-                    .unwrap_or(false);
-                if exiting {
-                    return; // 정상 종료 진행
-                }
-                api.prevent_close();
-                let _ = h.emit("window-close-requested", "overlay");
+            if let WindowEvent::CloseRequested { .. } = event {
+                // 오버레이 X 클릭 → 확인 없이 바로 닫힘
+                // 토글 버튼 상태 갱신을 위해 overlay-state-changed 발행
+                let _ = app_handle.emit("overlay-state-changed", false);
             }
         });
     }
