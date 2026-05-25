@@ -120,7 +120,7 @@ export function SiteHeader() {
           <RefreshCw
             className={cn("h-3 w-3", checking && "animate-spin")}
           />
-          <span>Ver.5.5.0</span>
+          <span>Ver.{process.env.NEXT_PUBLIC_APP_VERSION}</span>
           {info?.available && (
             <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-emerald-500 ring-1 ring-background" />
           )}
