@@ -76,6 +76,16 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: npm run tauri build
 
+      - name: Debug bundle output
+        shell: bash
+        run: |
+          echo "=== bundle dir contents ==="
+          find src-tauri/target/release/bundle -type f | sort || true
+          echo "=== TAURI_SIGNING_PRIVATE_KEY set? ==="
+          if [ -n "$TAURI_SIGNING_PRIVATE_KEY" ]; then echo "YES (len=${#TAURI_SIGNING_PRIVATE_KEY})"; else echo "NO"; fi
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+
       - name: Extract version
         id: version
         shell: bash
