@@ -22,6 +22,12 @@ on:
     tags:
       - "v*.*.*"
 
+# GitHub Release 생성 + 파일 업로드 위해 contents:write 권한 필요.
+# Settings → Actions → General → Workflow permissions = "Read repository contents and packages permissions"
+# 이면 명시 안 해도 되지만, 명시가 더 안전.
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: windows-latest
