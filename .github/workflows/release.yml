@@ -87,8 +87,11 @@ jobs:
             exit 1
           fi
           echo "Signing: $exe"
-          # TAURI_SIGNING_PRIVATE_KEY 는 env에서 CLI가 자동 읽음 (-k 인수 불필요)
-          npx @tauri-apps/cli signer sign "$exe"
+          # 한글 파일명 회피: 단순 경로로 복사 후 서명
+          cp "$exe" /tmp/app_setup.exe
+          npx @tauri-apps/cli signer sign -p "" /tmp/app_setup.exe
+          cp /tmp/app_setup.exe.sig "${exe}.sig"
+          rm -f /tmp/app_setup.exe /tmp/app_setup.exe.sig
           echo "Signature created: ${exe}.sig"
           ls -la "${exe}.sig"
 
