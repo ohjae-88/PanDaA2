@@ -71,20 +71,29 @@ jobs:
         run: npm install --no-audit --no-fund
 
       - name: Build Tauri
-        env:
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: npm run tauri build
 
-      - name: Debug bundle output
+      - name: Sign bundle (explicit)
+        if: steps.secrets_check.outputs.has_signing == 'true'
         shell: bash
-        run: |
-          echo "=== bundle dir contents ==="
-          find src-tauri/target/release/bundle -type f | sort || true
-          echo "=== TAURI_SIGNING_PRIVATE_KEY set? ==="
-          if [ -n "$TAURI_SIGNING_PRIVATE_KEY" ]; then echo "YES (len=${#TAURI_SIGNING_PRIVATE_KEY})"; else echo "NO"; fi
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          set -e
+          nsis_dir="src-tauri/target/release/bundle/nsis"
+          exe=$(ls "$nsis_dir"/*.exe 2>/dev/null | head -1 || true)
+          if [ -z "$exe" ]; then
+            echo "::error::No .exe found to sign"
+            exit 1
+          fi
+          echo "Signing: $exe"
+          # base64 디코딩 → minisign key 텍스트 형식으로 임시 파일 작성
+          echo "$TAURI_SIGNING_PRIVATE_KEY" | base64 -d > /tmp/signing.key
+          # 서명 실행 (비밀번호 없음)
+          npx @tauri-apps/cli signer sign -k /tmp/signing.key "$exe"
+          rm -f /tmp/signing.key
+          echo "Signature created: ${exe}.sig"
+          ls -la "${exe}.sig"
 
       - name: Extract version
         id: version
