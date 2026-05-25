@@ -35,14 +35,6 @@
   "plugins": {
     "shell": {
       "open": true
-    },
-    "updater": {
-      "active": false,
-      "endpoints": [
-        "https://github.com/ohjae-88/PanDaA2/releases/latest/download/latest.json"
-      ],
-      "dialog": false,
-      "pubkey": "<공개키 base64 — npx @tauri-apps/cli signer generate 결과의 .pub 내용으로 교체>"
     }
   },
   "bundle": {

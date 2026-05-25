@@ -60,13 +60,9 @@ jobs:
           fi
 
       - name: Install dependencies
-        # npm ci 우선 — 빠르고 결정적. 실패 시 npm install 폴백 (lockfile 드리프트 허용).
-        shell: bash
-        run: |
-          if ! npm ci; then
-            echo "::warning::npm ci failed — falling back to npm install"
-            npm install --no-audit --no-fund
-          fi
+        # npm install 사용 — lockfile drift 허용 (npm ci는 정확 일치 요구).
+        # CI 재현성보다 빌드 성공 우선. lockfile은 부수적으로 갱신될 수 있음.
+        run: npm install --no-audit --no-fund
 
       - name: Build Tauri
         env:

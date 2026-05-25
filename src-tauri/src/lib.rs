@@ -500,6 +500,8 @@ pub fn run() {
         }))
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
+        // Updater — tauri.conf.json 의 plugins.updater 설정 시에만 활성화.
+        // 실제 키 생성 + pubkey 입력 + active:true 적용 후 docs/updater-setup.md 참조.
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(
             // 로그 — stdout + 로그 파일 (LOG_DIR/logs/). 사용자 버그 리포트 시 첨부 가능.
