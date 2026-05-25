@@ -1,0 +1,69 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "판다의 A2",
+  "version": "5.4.0",
+  "identifier": "com.pandaa2.companion",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:3000",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../out"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "판다의 A2 통합 Ver.5.4.0",
+        "width": 1400,
+        "height": 900,
+        "minWidth": 1024,
+        "minHeight": 700,
+        "resizable": true,
+        "fullscreen": false,
+        "decorations": true,
+        "transparent": false,
+        "alwaysOnTop": false,
+        "center": true,
+        "dragDropEnabled": false,
+        "visible": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "plugins": {
+    "shell": {
+      "open": true
+    },
+    "updater": {
+      "active": false,
+      "endpoints": [
+        "https://github.com/ohjae-88/PanDaA2/releases/latest/download/latest.json"
+      ],
+      "dialog": false,
+      "pubkey": "<공개키 base64 — npx @tauri-apps/cli signer generate 결과의 .pub 내용으로 교체>"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "category": "Utility",
+    "shortDescription": "AION2 컴패니언 — 배럭 / 파티 / 아르카나 / 알리미",
+    "longDescription": "판다의 A2 통합 — AION2 게임 관리 도구. 인게임 오버레이 지원 예정.",
+    "windows": {
+      "nsis": {
+        "installerIcon": "icons/icon.ico",
+        "displayLanguageSelector": false,
+        "languages": ["Korean", "English"]
+      }
+    }
+  }
+}
