@@ -50,7 +50,8 @@ type UpdaterPlugin = {
 
 async function loadUpdater(): Promise<UpdaterPlugin | null> {
   try {
-    const m = await import(/* @vite-ignore */ "@tauri-apps/plugin-updater" as string);
+    // as string 캐스트 제거 — webpack이 정적 분석 가능해야 번들에 포함됨
+    const m = await import("@tauri-apps/plugin-updater");
     return m as unknown as UpdaterPlugin;
   } catch {
     return null;
@@ -59,7 +60,7 @@ async function loadUpdater(): Promise<UpdaterPlugin | null> {
 
 async function loadProcess(): Promise<{ relaunch: () => Promise<void> } | null> {
   try {
-    const m = await import(/* @vite-ignore */ "@tauri-apps/plugin-process" as string);
+    const m = await import("@tauri-apps/plugin-process");
     return m as unknown as { relaunch: () => Promise<void> };
   } catch {
     return null;
