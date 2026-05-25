@@ -87,10 +87,8 @@ jobs:
             exit 1
           fi
           echo "Signing: $exe"
-          # CLI 도움말 확인
-          npx @tauri-apps/cli signer sign --help || true
-          # 환경변수로 키 직접 전달 (파일 경유 없음)
-          npx @tauri-apps/cli signer sign --private-key "$TAURI_SIGNING_PRIVATE_KEY" "$exe"
+          # TAURI_SIGNING_PRIVATE_KEY 는 env에서 CLI가 자동 읽음 (-k 인수 불필요)
+          npx @tauri-apps/cli signer sign "$exe"
           echo "Signature created: ${exe}.sig"
           ls -la "${exe}.sig"
 
