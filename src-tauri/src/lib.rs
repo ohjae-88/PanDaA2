@@ -187,7 +187,6 @@ async fn open_overlay(app: tauri::AppHandle) -> Result<(), String> {
     // 종료 X 클릭 시 → frontend에 확인 다이얼로그 트리거
     // ExitFlag set 시 (exit_app/restart_app/트레이 quit 등) prevent_close 스킵 — 정상 종료 허용
     {
-        let h = win.clone();
         let app_handle = app.clone();
         win.on_window_event(move |event| {
             if let WindowEvent::CloseRequested { .. } = event {
