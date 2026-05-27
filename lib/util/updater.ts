@@ -3,27 +3,11 @@
 /**
  * 인앱 업데이트 — tauri-plugin-updater 래퍼.
  *
- * **활성화 전 필수 설정** (현재 미설정 → 호출 시 조용히 실패):
- *  1. 서명 키 생성: `npx @tauri-apps/cli signer generate -w ~/.tauri/myapp.key`
- *  2. `src-tauri/tauri.conf.json` 에 plugins.updater 추가:
- *     ```json
- *     "plugins": {
- *       "updater": {
- *         "active": true,
- *         "endpoints": ["https://github.com/ohjae-88/PanDaA2/releases/latest/download/latest.json"],
- *         "dialog": false,
- *         "pubkey": "<공개키 base64>"
- *       }
- *     }
- *     ```
- *  3. GitHub release 시 `latest.json` 파일 + .sig 서명 첨부 (CI에서 생성)
- *  4. `src-tauri/src/lib.rs` 빌더 체인에 `.plugin(tauri_plugin_updater::Builder::new().build())` 추가
- *  5. `capabilities/default.json` 권한 `updater:default` 추가
- *
  * 호출 흐름: checkUpdate() → 사용자 확인 → downloadAndInstall() → 앱 재시작
  */
 
 import { isTauri } from "@/lib/tauri";
+import { saveUpdateErrorLog } from "@/lib/tauri";
 import { log } from "./logger";
 
 export type UpdateInfo = {
@@ -32,6 +16,11 @@ export type UpdateInfo = {
   newVersion?: string;
   notes?: string;
 };
+
+/** downloadAndInstall() 반환값 */
+export type InstallResult =
+  | { ok: true }
+  | { ok: false; error: string; errorLogPath: string | null };
 
 type UpdateEvent =
   | { event: "Started"; data: { contentLength?: number | null } }
@@ -50,7 +39,6 @@ type UpdaterPlugin = {
 
 async function loadUpdater(): Promise<UpdaterPlugin | null> {
   try {
-    // as string 캐스트 제거 — webpack이 정적 분석 가능해야 번들에 포함됨
     const m = await import("@tauri-apps/plugin-updater");
     return m as unknown as UpdaterPlugin;
   } catch {
@@ -67,13 +55,54 @@ async function loadProcess(): Promise<{ relaunch: () => Promise<void> } | null> 
   }
 }
 
+/** 업데이트 실패 시 사용자에게 전달할 로그 파일 내용 생성. */
+function buildErrorLog(
+  e: unknown,
+  ctx: { currentVersion: string; newVersion: string }
+): string {
+  const ts = new Date().toLocaleString("ko-KR", { hour12: false });
+  const errorStr =
+    e instanceof Error
+      ? `${e.name}: ${e.message}\n\n스택 트레이스:\n${e.stack ?? "(없음)"}`
+      : String(e);
+
+  return [
+    "============================================================",
+    "  판다의 A2 — 자동 업데이트 실패 로그",
+    "============================================================",
+    "",
+    `생성 시각  : ${ts}`,
+    `현재 버전  : v${ctx.currentVersion}`,
+    `업데이트 대상: v${ctx.newVersion}`,
+    "",
+    "------------------------------------------------------------",
+    "  오류 내용",
+    "------------------------------------------------------------",
+    errorStr,
+    "",
+    "------------------------------------------------------------",
+    "  안내",
+    "------------------------------------------------------------",
+    "이 파일을 개발자(GitHub Issues)에 첨부해 주시면",
+    "원인 파악에 큰 도움이 됩니다.",
+    "  https://github.com/ohjae-88/PanDaA2/issues",
+    "",
+    "직접 다운로드:",
+    "  https://github.com/ohjae-88/PanDaA2/releases/latest",
+  ].join("\n");
+}
+
 /** 업데이트 확인. 가능 시 정보 반환, 없으면 available=false. */
 export async function checkForUpdate(): Promise<UpdateInfo | null> {
   if (!isTauri()) return null;
   try {
     const mod = await loadUpdater();
     if (!mod) return null;
-    const update = await mod.check();
+    // 15초 타임아웃: Suspense 언마운트로 Rust 콜백이 유실되면 프로미스가 영구 대기하므로 방지
+    const timeout = new Promise<null>((resolve) =>
+      setTimeout(() => resolve(null), 15_000)
+    );
+    const update = await Promise.race([mod.check(), timeout]);
     const appMod = await import("@tauri-apps/api/app");
     const currentVersion = await appMod.getVersion();
     if (!update) return { available: false, currentVersion };
@@ -89,16 +118,23 @@ export async function checkForUpdate(): Promise<UpdateInfo | null> {
   }
 }
 
-/** 다운로드 + 설치 + 재시작. 진행률 콜백 옵션. */
+/** 다운로드 + 설치 + 재시작. 실패 시 로그 파일 저장 후 경로 반환. */
 export async function downloadAndInstall(
   onProgress?: (downloaded: number, total: number | null) => void
-): Promise<boolean> {
-  if (!isTauri()) return false;
+): Promise<InstallResult> {
+  if (!isTauri()) return { ok: false, error: "비-Tauri 환경", errorLogPath: null };
+
+  // catch 블록에서도 접근할 수 있도록 스코프 상위에 선언
+  let newVersion = "확인 불가";
+
   try {
     const mod = await loadUpdater();
-    if (!mod) return false;
+    if (!mod) return { ok: false, error: "업데이터 플러그인 로드 실패", errorLogPath: null };
     const update = await mod.check();
-    if (!update) return false;
+    if (!update) return { ok: false, error: "업데이트 정보를 가져올 수 없음", errorLogPath: null };
+
+    newVersion = update.version; // ← 에러 로그에서 사용
+
     let downloaded = 0;
     let total: number | null = null;
     await update.downloadAndInstall((event: UpdateEvent) => {
@@ -109,11 +145,27 @@ export async function downloadAndInstall(
         onProgress?.(downloaded, total);
       }
     });
+
     const procMod = await loadProcess();
     if (procMod) await procMod.relaunch();
-    return true;
+    return { ok: true };
   } catch (e) {
+    const errorStr =
+      e instanceof Error ? `${e.name}: ${e.message}` : String(e);
     log.error("updater install failed", e);
-    return false;
+
+    // 실패 로그 파일 저장
+    let errorLogPath: string | null = null;
+    try {
+      const appMod = await import("@tauri-apps/api/app");
+      const currentVersion = await appMod.getVersion().catch(() => "unknown");
+      const logContent = buildErrorLog(e, { currentVersion, newVersion });
+      errorLogPath = await saveUpdateErrorLog(logContent);
+      if (errorLogPath) log.info("update error log saved", errorLogPath);
+    } catch (logErr) {
+      log.warn("로그 파일 저장 실패", logErr);
+    }
+
+    return { ok: false, error: errorStr, errorLogPath };
   }
 }

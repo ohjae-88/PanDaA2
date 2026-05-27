@@ -395,6 +395,86 @@ fn restart_app(app: tauri::AppHandle) {
     app.restart();
 }
 
+/// 업데이트 실패 로그를 앱 로그 디렉토리에 저장. 저장된 파일 전체 경로를 반환.
+/// 경로: %LOCALAPPDATA%\{app}\logs\update-error-{timestamp}.txt
+#[tauri::command]
+fn save_update_error_log(app: tauri::AppHandle, content: String) -> Result<String, String> {
+    let log_dir = app.path().app_log_dir()
+        .map_err(|e| format!("로그 디렉토리 조회 실패: {}", e))?;
+    std::fs::create_dir_all(&log_dir)
+        .map_err(|e| format!("로그 디렉토리 생성 실패: {}", e))?;
+    let ts = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    let path = log_dir.join(format!("update-error-{}.txt", ts));
+    std::fs::write(&path, content.as_bytes())
+        .map_err(|e| format!("파일 쓰기 실패: {}", e))?;
+    Ok(path.to_string_lossy().to_string())
+}
+
+/// 파일 탐색기에서 지정 파일을 선택된 상태로 열기 (Windows: explorer /select).
+#[tauri::command]
+fn reveal_in_explorer(path: String) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("explorer")
+            .arg(format!("/select,\"{}\"", path))
+            .spawn()
+            .map_err(|e| format!("탐색기 실행 실패: {}", e))?;
+    }
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .args(["-R", &path])
+            .spawn()
+            .map_err(|e| format!("Finder 실행 실패: {}", e))?;
+    }
+    #[cfg(target_os = "linux")]
+    {
+        let parent = std::path::Path::new(&path)
+            .parent()
+            .map(|p| p.to_string_lossy().to_string())
+            .unwrap_or(path.clone());
+        std::process::Command::new("xdg-open")
+            .arg(&parent)
+            .spawn()
+            .map_err(|e| format!("파일 관리자 실행 실패: {}", e))?;
+    }
+    Ok(())
+}
+
+/// 시스템 다운로드 폴더를 파일 탐색기로 열기.
+/// plugin-shell open()이 Windows 로컬 경로에서 불안정하므로 OS 네이티브 명령 직접 사용.
+#[tauri::command]
+fn open_download_folder(app: tauri::AppHandle) -> Result<(), String> {
+    let download_dir = app.path().download_dir()
+        .map_err(|e| format!("다운로드 폴더 조회 실패: {}", e))?;
+    let path_str = download_dir.to_string_lossy().to_string();
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("explorer")
+            .arg(&path_str)
+            .spawn()
+            .map_err(|e| format!("탐색기 실행 실패: {}", e))?;
+    }
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg(&path_str)
+            .spawn()
+            .map_err(|e| format!("파인더 실행 실패: {}", e))?;
+    }
+    #[cfg(target_os = "linux")]
+    {
+        std::process::Command::new("xdg-open")
+            .arg(&path_str)
+            .spawn()
+            .map_err(|e| format!("파일 관리자 실행 실패: {}", e))?;
+    }
+    Ok(())
+}
+
 /// 메인 윈도우 표시 (Tauri 부팅 시 visible=false 이므로 명시적 호출 필요)
 #[tauri::command]
 fn show_main_window(app: tauri::AppHandle) -> Result<(), String> {
@@ -651,6 +731,9 @@ pub fn run() {
             unregister_all_custom_hotkeys,
             exit_app,
             restart_app,
+            open_download_folder,
+            save_update_error_log,
+            reveal_in_explorer,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

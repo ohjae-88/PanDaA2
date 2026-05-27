@@ -37,7 +37,7 @@
       "open": true
     },
     "updater": {
-      "pubkey": "RWRoLPBsZHAZAZvYjA4HBSViquJKHz/CsBuS+J7cLb3Oy3XgIQFIjdyj",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXkgNjgyQ0YwNkM2NDcwMTkwMQpSV1JvTFBCc1pIQVpBWnZZakE0SEJTVmlxdUpLSHovQ3NCdVMrSjdjTGIzT3kzWGdJUUZJamR5ago=",
       "endpoints": [
         "https://github.com/ohjae-88/PanDaA2/releases/latest/download/latest.json"
       ]

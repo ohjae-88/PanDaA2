@@ -38,3 +38,27 @@ export async function getAppVersion(): Promise<string> {
   if (!invoke) return `${process.env.NEXT_PUBLIC_APP_VERSION ?? "0.0.0"} (browser)`;
   return invoke<string>("app_version");
 }
+
+export async function openDownloadFolder(): Promise<void> {
+  const invoke = await getInvoke();
+  if (!invoke) return;
+  await invoke("open_download_folder");
+}
+
+/** 업데이트 실패 로그를 앱 로그 디렉토리에 저장. 저장된 파일 경로 반환, 실패 시 null. */
+export async function saveUpdateErrorLog(content: string): Promise<string | null> {
+  const invoke = await getInvoke();
+  if (!invoke) return null;
+  try {
+    return await invoke<string>("save_update_error_log", { content });
+  } catch {
+    return null;
+  }
+}
+
+/** 파일 탐색기에서 지정 파일을 선택된 상태로 열기. */
+export async function revealInExplorer(path: string): Promise<void> {
+  const invoke = await getInvoke();
+  if (!invoke) return;
+  await invoke("reveal_in_explorer", { path });
+}

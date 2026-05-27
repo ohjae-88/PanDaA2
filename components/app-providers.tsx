@@ -7,8 +7,6 @@ import { HotkeyRuntime } from "@/components/hotkey-runtime";
 import { CloseConfirmDialog } from "@/components/close-confirm-dialog";
 import { SecondInstanceDialog } from "@/components/second-instance-dialog";
 import { NotifierTickRunner } from "@/components/notifier/notifier-tick-runner";
-import { UpdateCheckProvider } from "@/components/update-check-provider";
-
 /**
  * 앱 전역 Provider — pathname에 따라 경량화.
  *
@@ -18,6 +16,9 @@ import { UpdateCheckProvider } from "@/components/update-check-provider";
  *
  *  StoreSyncProvider는 모든 윈도우에서 필요 (store 변경 즉시 반영). 단, 장비창은 store mutate
  *  거의 없으므로 한 윈도우 추가 비용은 작음. 추가 분리 시 StoreSyncProvider도 제외 가능.
+ *
+ *  UpdateCheckProvider는 Suspense 재렌더링 시 언마운트되면 Rust async 콜백이 유실되므로
+ *  layout.tsx에서 Suspense 바깥에 직접 마운트한다.
  */
 export function AppProviders() {
   const pathname = usePathname() ?? "";
@@ -36,7 +37,6 @@ export function AppProviders() {
       <CloseConfirmDialog />
       <SecondInstanceDialog />
       <NotifierTickRunner />
-      <UpdateCheckProvider />
     </>
   );
 }

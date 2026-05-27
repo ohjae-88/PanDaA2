@@ -95,16 +95,11 @@ export function UnifiedDialog({ open, onClose }: Props) {
   /** Tauri 환경 — 시스템 다운로드 폴더 탐색기로 열기. 비-Tauri는 무시. */
   async function openDownloadFolder() {
     try {
-      const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
-      if (!isTauri) return;
-      const [{ downloadDir }, { open }] = await Promise.all([
-        import("@tauri-apps/api/path"),
-        import("@tauri-apps/plugin-shell"),
-      ]);
-      const dir = await downloadDir();
-      await open(dir);
+      const { openDownloadFolder: openFolder } = await import("@/lib/tauri");
+      await openFolder();
     } catch (e) {
       log.error("폴더 열기 실패", e);
+      toast.error("다운로드 폴더를 열 수 없습니다.");
     }
   }
 

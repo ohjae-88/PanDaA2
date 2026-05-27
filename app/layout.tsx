@@ -6,6 +6,7 @@ import { SiteHeader } from "@/components/site-header";
 import { MainWrapper } from "@/components/main-wrapper";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AppProviders } from "@/components/app-providers";
+import { UpdateCheckProvider } from "@/components/update-check-provider";
 import { EmbedScaleApplier } from "@/components/embed-scale-applier";
 import { Toaster } from "@/components/ui/sonner";
 import { ConfirmDialogHost } from "@/components/confirm-dialog-host";
@@ -31,6 +32,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <SiteHeader />
               <MainWrapper>{children}</MainWrapper>
             </Suspense>
+            {/* Suspense 바깥 마운트 — Suspense 재렌더링 시 언마운트되면 Rust 콜백 유실 */}
+            <UpdateCheckProvider />
             <Toaster />
             <ConfirmDialogHost />
           </TooltipProvider>

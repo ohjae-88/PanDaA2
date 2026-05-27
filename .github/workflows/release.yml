@@ -4,16 +4,18 @@
 #
 # 동작:
 #  1. Windows 러너에서 `tauri build` → NSIS .exe 생성
-#  2. GitHub Release 생성 (draft)
-#  3. .exe 첨부 (서명 secrets 있으면 .exe.sig + latest.json도 첨부)
+#  2. 한글 파일명 → ASCII 파일명(PandaA2_{version}_x64-setup.exe)으로 복사
+#     (한글 URL 인코딩이 GitHub CDN에서 404를 유발하는 문제 방지)
+#  3. 서명 secrets 있으면 .exe.sig + latest.json 생성
+#  4. GitHub Release 생성 (draft)
 #
 # Updater 활성화 (선택):
 #  1. 로컬에서: npx @tauri-apps/cli signer generate -w ~/.tauri/aion2.key
 #  2. Repo Secrets에 등록:
 #       TAURI_SIGNING_PRIVATE_KEY        (~/.tauri/aion2.key 파일 내용)
-#       TAURI_SIGNING_PRIVATE_KEY_PASSWORD
-#  3. tauri.conf.json plugins.updater 활성화 (현재 제거됨 → 활성 시 복원)
-#  4. capabilities/default.json에 "updater:default" 추가
+#       TAURI_SIGNING_PRIVATE_KEY_PASSWORD  (키 생성 시 설정한 비밀번호, 없으면 빈 문자열)
+#  3. tauri.conf.json plugins.updater 확인 (pubkey 설정)
+#  4. capabilities/default.json에 "updater:default" 확인
 
 name: Release
 
@@ -22,9 +24,6 @@ on:
     tags:
       - "v*.*.*"
 
-# GitHub Release 생성 + 파일 업로드 위해 contents:write 권한 필요.
-# Settings → Actions → General → Workflow permissions = "Read repository contents and packages permissions"
-# 이면 명시 안 해도 되지만, 명시가 더 안전.
 permissions:
   contents: write
 
@@ -66,42 +65,18 @@ jobs:
           fi
 
       - name: Install dependencies
-        # npm install 사용 — lockfile drift 허용 (npm ci는 정확 일치 요구).
-        # CI 재현성보다 빌드 성공 우선. lockfile은 부수적으로 갱신될 수 있음.
         run: npm install --no-audit --no-fund
 
       - name: Build Tauri
         run: npm run tauri build
-
-      - name: Sign bundle (explicit)
-        if: steps.secrets_check.outputs.has_signing == 'true'
-        shell: bash
-        env:
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-        run: |
-          set -e
-          nsis_dir="src-tauri/target/release/bundle/nsis"
-          exe=$(ls "$nsis_dir"/*.exe 2>/dev/null | head -1 || true)
-          if [ -z "$exe" ]; then
-            echo "::error::No .exe found to sign"
-            exit 1
-          fi
-          echo "Signing: $exe"
-          # 한글 파일명 회피: 단순 경로로 복사 후 서명
-          cp "$exe" /tmp/app_setup.exe
-          npx @tauri-apps/cli signer sign -p "" /tmp/app_setup.exe
-          cp /tmp/app_setup.exe.sig "${exe}.sig"
-          rm -f /tmp/app_setup.exe /tmp/app_setup.exe.sig
-          echo "Signature created: ${exe}.sig"
-          ls -la "${exe}.sig"
 
       - name: Extract version
         id: version
         shell: bash
         run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
 
-      - name: Find artifacts
-        id: artifacts
+      - name: Rename installer to ASCII filename
+        id: rename
         shell: bash
         run: |
           set -e
@@ -111,16 +86,42 @@ jobs:
             ls -R src-tauri/target/release/bundle/ || true
             exit 1
           fi
-          exe=$(ls "$nsis_dir"/*.exe 2>/dev/null | head -1 || true)
-          if [ -z "$exe" ]; then
+          # 한글 파일명 exe 찾기
+          original=$(ls "$nsis_dir"/*.exe 2>/dev/null | head -1 || true)
+          if [ -z "$original" ]; then
             echo "::error::No .exe found in $nsis_dir"
             ls -la "$nsis_dir"
             exit 1
           fi
-          echo "exe_path=$exe" >> $GITHUB_OUTPUT
-          echo "exe_name=$(basename "$exe")" >> $GITHUB_OUTPUT
-          # Optional .sig file (signing 시에만 생성)
-          sig="${exe}.sig"
+          version="${{ steps.version.outputs.version }}"
+          # ASCII 파일명으로 복사 — 한글 URL 인코딩 문제 방지
+          ascii_name="PandaA2_${version}_x64-setup.exe"
+          ascii_path="$nsis_dir/$ascii_name"
+          cp "$original" "$ascii_path"
+          echo "original=$original" >> $GITHUB_OUTPUT
+          echo "exe_path=$ascii_path" >> $GITHUB_OUTPUT
+          echo "exe_name=$ascii_name" >> $GITHUB_OUTPUT
+          echo "Renamed: $(basename "$original") → $ascii_name"
+
+      - name: Sign bundle
+        if: steps.secrets_check.outputs.has_signing == 'true'
+        shell: bash
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          set -e
+          exe="${{ steps.rename.outputs.exe_path }}"
+          echo "Signing: $exe"
+          npx @tauri-apps/cli signer sign "$exe"
+          echo "Signature created: ${exe}.sig"
+          ls -la "${exe}.sig"
+
+      - name: Check sig file
+        id: sig_check
+        shell: bash
+        run: |
+          sig="${{ steps.rename.outputs.exe_path }}.sig"
           if [ -f "$sig" ]; then
             echo "sig_path=$sig" >> $GITHUB_OUTPUT
             echo "has_sig=true" >> $GITHUB_OUTPUT
@@ -129,16 +130,15 @@ jobs:
           fi
 
       - name: Generate latest.json
-        if: steps.artifacts.outputs.has_sig == 'true'
+        if: steps.sig_check.outputs.has_sig == 'true'
         shell: bash
         run: |
           version="${{ steps.version.outputs.version }}"
-          exe_name="${{ steps.artifacts.outputs.exe_name }}"
-          sig=$(cat "${{ steps.artifacts.outputs.sig_path }}")
+          exe_name="${{ steps.rename.outputs.exe_name }}"
+          sig=$(cat "${{ steps.sig_check.outputs.sig_path }}")
           pub_date=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-          # 한글 파일명 → URL 인코딩 (Tauri updater가 raw 한글 URL로 404 반환하는 문제 방지)
-          exe_encoded=$(python3 -c "import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1]))" "$exe_name")
-          download_url="https://github.com/${GITHUB_REPOSITORY}/releases/download/v${version}/${exe_encoded}"
+          # ASCII 파일명 사용 — URL 인코딩 불필요
+          download_url="https://github.com/${GITHUB_REPOSITORY}/releases/download/v${version}/${exe_name}"
           cat > latest.json <<EOF
           {
             "version": "${version}",
@@ -152,14 +152,16 @@ jobs:
             }
           }
           EOF
+          echo "Generated latest.json:"
+          cat latest.json
 
       - name: Collect release files
         id: files
         shell: bash
         run: |
-          files="${{ steps.artifacts.outputs.exe_path }}"
-          if [ "${{ steps.artifacts.outputs.has_sig }}" = "true" ]; then
-            files="${files}"$'\n'"${{ steps.artifacts.outputs.sig_path }}"$'\n'"latest.json"
+          files="${{ steps.rename.outputs.exe_path }}"
+          if [ "${{ steps.sig_check.outputs.has_sig }}" = "true" ]; then
+            files="${files}"$'\n'"${{ steps.sig_check.outputs.sig_path }}"$'\n'"latest.json"
           fi
           {
             echo 'list<<EOF'
