@@ -85,26 +85,9 @@ fn raise_window(id: u32) {
 #[cfg(not(windows))]
 fn raise_window(_id: u32) {}
 
-/// 거의 검은 이미지인지 — DirectX 창 단독 캡처 실패 시 PrintWindow가 검은 화면 반환.
-fn looks_blank(img: &RgbaImage) -> bool {
-    let data = img.as_raw();
-    let mut nonzero = 0u32;
-    let mut i = 0usize;
-    while i + 2 < data.len() {
-        if data[i] > 8 || data[i + 1] > 8 || data[i + 2] > 8 {
-            nonzero += 1;
-            if nonzero > 50 {
-                return false;
-            }
-        }
-        i += 4 * 97; // 샘플링
-    }
-    true
-}
-
 /// 제목으로 창 찾아 캡처 → RgbaImage.
-/// 1) 창 단독 캡처(다른 창에 가려도 해당 창만) 우선.
-/// 2) 실패/검은화면(게임 DirectX 등)이면 → 창을 전면으로 올린 뒤 모니터 캡처 → 창 영역 크롭.
+/// 게임(DirectX) 창 단독 캡처는 검은화면이 되므로, 대상 창을 전면으로 올린 뒤
+/// 모니터를 캡처하고 창 영역만 크롭한다 (전면화 → 다른 창 가림 방지).
 fn capture_window_image(title: &str) -> Result<RgbaImage, String> {
     let windows = xcap::Window::all().map_err(|e| format!("창 목록 조회 실패: {e}"))?;
     let win = windows
@@ -112,20 +95,7 @@ fn capture_window_image(title: &str) -> Result<RgbaImage, String> {
         .find(|w| window_matches(w.title(), title))
         .ok_or_else(|| format!("창을 찾을 수 없습니다: {title}"))?;
 
-    // 1) 창 단독 캡처 — occlusion-free. 검은화면이면 폴백.
-    if let Ok(shot) = win.capture_image() {
-        let (w, h) = (shot.width(), shot.height());
-        if w > 4 && h > 4 {
-            let raw: Vec<u8> = shot.into_raw();
-            if let Some(img) = RgbaImage::from_raw(w, h, raw) {
-                if !looks_blank(&img) {
-                    return Ok(img);
-                }
-            }
-        }
-    }
-
-    // 2) 폴백 — 전면화 후 모니터 캡처 → 창 영역 크롭
+    // 대상 창 전면화 → 잠시 대기 후 모니터 캡처 → 창 영역 크롭
     raise_window(win.id());
     std::thread::sleep(std::time::Duration::from_millis(250));
     let mon = win.current_monitor();
