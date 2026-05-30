@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Pencil, Trash2, ChevronDown, ChevronUp, Info } from "lucide-react";
+import { Pencil, Trash2, ChevronDown, ChevronUp, Info, ArrowUp, ArrowDown } from "lucide-react";
 import type { Account, Character } from "@/lib/barrack/types";
 import { useBarrackStore } from "@/lib/barrack/store";
 import { Button } from "@/components/ui/button";
@@ -15,9 +15,12 @@ type Props = {
   server: string;
   chars: Character[];
   onEditAcc: (id: string) => void;
+  /** 계정 순서 이동 — 제공되면 ▲▼ 버튼 노출 (전체뷰 + 계정 첫 그룹에서만) */
+  onMoveUp?: () => void;
+  onMoveDown?: () => void;
 };
 
-export function AccountServerBar({ acc, server, chars, onEditAcc }: Props) {
+export function AccountServerBar({ acc, server, chars, onEditAcc, onMoveUp, onMoveDown }: Props) {
   const sd = acc.servers?.[server];
   const db = useBarrackStore((s) => s.dbSettings);
   const patchServerData = useBarrackStore((s) => s.patchServerData);
@@ -75,6 +78,16 @@ export function AccountServerBar({ acc, server, chars, onEditAcc }: Props) {
         <span className="text-[11px] text-muted-foreground">{chars.length}명</span>
 
         <div className="ml-auto flex items-center gap-1">
+          {(onMoveUp || onMoveDown) && (
+            <div className="flex items-center gap-0.5 mr-1">
+              <Button variant="ghost" size="xs" onClick={onMoveUp} disabled={!onMoveUp} title="위로 이동">
+                <ArrowUp className="h-3 w-3" />
+              </Button>
+              <Button variant="ghost" size="xs" onClick={onMoveDown} disabled={!onMoveDown} title="아래로 이동">
+                <ArrowDown className="h-3 w-3" />
+              </Button>
+            </div>
+          )}
           <button
             onClick={() => setTicketOpen((v) => !v)}
             className="text-[11px] font-bold text-muted-foreground hover:text-foreground border rounded px-2 py-0.5 inline-flex items-center gap-1"

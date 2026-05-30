@@ -23,20 +23,37 @@ export function NotifierTimeInputDialog({ open, itemId, onClose }: Props) {
 
   const [mode, setMode] = useState<"spawn" | "remain">("remain");
   const [spawn, setSpawn] = useState(nowLocalInput());
-  const [h, setH] = useState(0);
-  const [m, setM] = useState(0);
-  const [s, setS] = useState(0);
+  const [remainStr, setRemainStr] = useState("00:00:00");
 
   useEffect(() => {
     if (!open || !item) return;
     setMode("remain");
     setSpawn(nowLocalInput());
-    setH(Math.floor((item.cycleMinutes || 0) / 60));
-    setM((item.cycleMinutes || 0) % 60);
-    setS(0);
+    setRemainStr("00:00:00");
   }, [open, item]);
 
   if (!item) return null;
+
+  // 숫자만 추출 후 좌측부터 2자리씩 콜론 자동 삽입 ("010040" → "01:00:40")
+  function formatDigits(raw: string): string {
+    const d = raw.replace(/\D/g, "").slice(0, 6);
+    const groups: string[] = [];
+    for (let i = 0; i < d.length; i += 2) groups.push(d.slice(i, i + 2));
+    return groups.join(":");
+  }
+
+  // "HH:MM:SS" / "MM:SS" / "SS" 모두 허용 → 초 단위. 잘못된 입력은 null.
+  function parseHMS(str: string): number | null {
+    const parts = str.split(":").map((p) => p.trim());
+    if (parts.length > 3) return null;
+    if (parts.some((p) => p === "" || !/^\d+$/.test(p))) return null;
+    const nums = parts.map(Number);
+    let h = 0, m = 0, s = 0;
+    if (nums.length === 3) [h, m, s] = nums;
+    else if (nums.length === 2) [m, s] = nums;
+    else [s] = nums;
+    return h * 3600 + m * 60 + s;
+  }
 
   function handleApply() {
     if (!item) return;
@@ -46,8 +63,8 @@ export function NotifierTimeInputDialog({ open, itemId, onClose }: Props) {
       if (Number.isNaN(ts)) { toast.error("일시 형식 오류"); return; }
       setLastSpawnTs(item.id, ts);
     } else {
-      const remSec = h * 3600 + m * 60 + s;
-      if (remSec < 0) { toast.error("남은 시간을 입력하세요."); return; }
+      const remSec = parseHMS(remainStr);
+      if (remSec === null) { toast.error("남은 시간 형식 오류 (예: 01:30:00)"); return; }
       // 서버 시간(serverNow) 기준으로 계산해야 잔여 표시와 일치.
       // Date.now()를 쓰면 로컬 시계 오차만큼(예: 4~5초) 어긋남.
       const ts = serverNow() - Math.max(0, item.cycleMinutes * 60 - remSec) * 1000;
@@ -84,13 +101,15 @@ export function NotifierTimeInputDialog({ open, itemId, onClose }: Props) {
         ) : (
           <div className="space-y-1">
             <Label className="text-xs text-muted-foreground">남은 시간 (시 : 분 : 초)</Label>
-            <div className="flex items-center gap-2">
-              <Input type="number" min={0} className="w-[64px] text-center" value={h} onChange={(e) => setH(Number(e.target.value) || 0)} />
-              <span className="text-lg font-bold">:</span>
-              <Input type="number" min={0} max={59} className="w-[64px] text-center" value={m} onChange={(e) => setM(Number(e.target.value) || 0)} />
-              <span className="text-lg font-bold">:</span>
-              <Input type="number" min={0} max={59} className="w-[64px] text-center" value={s} onChange={(e) => setS(Number(e.target.value) || 0)} />
-            </div>
+            <Input
+              type="text"
+              inputMode="numeric"
+              placeholder="00:00:00"
+              className="text-center tabular-nums text-lg font-bold tracking-wider"
+              value={remainStr}
+              onChange={(e) => setRemainStr(formatDigits(e.target.value))}
+              onKeyDown={(e) => { if (e.key === "Enter") handleApply(); }}
+            />
           </div>
         )}
 

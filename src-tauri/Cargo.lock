@@ -30,7 +30,7 @@ dependencies = [
 
 [[package]]
 name = "aion2-companion"
-version = "5.5.0"
+version = "5.5.5"
 dependencies = [
  "log",
  "reqwest 0.12.28",

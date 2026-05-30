@@ -95,10 +95,10 @@ export function SiteHeader() {
 
   return (
     <header className="sticky top-0 z-40 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="flex h-14 items-center gap-3 px-4">
-        <Link href="/dashboard" className="flex items-center gap-2 font-bold">
+      <div className="flex h-14 flex-nowrap items-center gap-3 px-4">
+        <Link href="/dashboard" className="flex shrink-0 items-center gap-2 font-bold whitespace-nowrap">
           <span className="text-xl">🐼</span>
-          <span>판다의 A2</span>
+          <span className="hidden lg:inline">판다의 A2</span>
         </Link>
         <button
           type="button"
@@ -110,7 +110,7 @@ export function SiteHeader() {
               : "업데이트 확인"
           }
           className={cn(
-            "relative flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-normal transition-colors",
+            "relative flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-xs font-normal transition-colors whitespace-nowrap",
             "hover:bg-accent/20 disabled:opacity-60",
             info?.available
               ? "text-emerald-500 dark:text-emerald-400"
@@ -120,7 +120,7 @@ export function SiteHeader() {
           <RefreshCw
             className={cn("h-3 w-3", checking && "animate-spin")}
           />
-          <span>Ver.{process.env.NEXT_PUBLIC_APP_VERSION}</span>
+          <span className="hidden md:inline">Ver.{process.env.NEXT_PUBLIC_APP_VERSION}</span>
           {info?.available && (
             <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-emerald-500 ring-1 ring-background" />
           )}
@@ -128,14 +128,14 @@ export function SiteHeader() {
 
         <div className="mx-2 h-6 w-px bg-border" />
 
-        <nav className="flex items-center gap-2">
+        <nav className="flex shrink-0 items-center gap-2">
           {CATEGORIES.map(cat => {
             const active = isActiveCat(cat);
             return (
               <div
                 key={cat.key}
                 className={cn(
-                  "flex rounded-md border overflow-hidden transition-colors",
+                  "flex shrink-0 rounded-md border overflow-hidden transition-colors",
                   active
                     ? `border-current ${cat.colorClass} bg-current/10`
                     : "border-border text-muted-foreground hover:text-foreground"
@@ -144,11 +144,11 @@ export function SiteHeader() {
                 <Link
                   href={cat.defaultHref}
                   className={cn(
-                    "px-3 py-1.5 text-sm font-semibold hover:bg-accent/10 transition-colors",
+                    "px-3 py-1.5 text-sm font-semibold hover:bg-accent/10 transition-colors whitespace-nowrap",
                     active && cat.colorClass
                   )}
                 >
-                  {cat.icon} {cat.label}
+                  {cat.icon}<span className="hidden lg:inline">&nbsp;{cat.label}</span>
                 </Link>
                 <DropdownMenu>
                   <DropdownMenuTrigger
@@ -180,7 +180,7 @@ export function SiteHeader() {
           })}
         </nav>
 
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex shrink-0 items-center gap-2">
           <OverlayToggleButton settingsHref="/overlay/settings" settingsActive={!!pathname?.startsWith("/overlay/settings")} />
           <MainScaleControl />
           <UnifiedButton />

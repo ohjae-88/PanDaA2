@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Eye, EyeOff, Gift, Skull, Check } from "lucide-react";
+import { Eye, EyeOff, Gift, Skull, Check, LayoutGrid, Settings2 } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useBarrackStore, computeOdMax, sortCharacters } from "@/lib/barrack/store";
 import { useResetTick } from "@/components/barrack/use-reset-tick";
 import { subscribeSecondTick } from "@/lib/util/global-tick";
@@ -18,11 +19,27 @@ const CLASS_MAP = Object.fromEntries(CLASSES.map((c) => [c.id, c]));
 const RAID_DEF = [
   { key: "expedition", icon: "🗺", label: "원정" },
   { key: "transcend", icon: "⚡", label: "초월" },
-  { key: "sanctuary_ludra", icon: "🌟", label: "성역(루)" },
-  { key: "sanctuary_bagot", icon: "🌙", label: "성역(바)" },
+  { key: "sanctuary_ludra", icon: "🌟", label: "루드라" },
+  { key: "sanctuary_bagot", icon: "🌙", label: "바고트" },
 ] as const;
 
 type RaidKey = (typeof RAID_DEF)[number]["key"];
+
+// 심플 테이블 표시 항목 (캐릭터 열은 항상 표시)
+const COL_DEFS = [
+  { key: "cpil", label: "CP / IL" },
+  { key: "od", label: "🔷 오드" },
+  { key: "expedition", label: "🗺 원정" },
+  { key: "transcend", label: "⚡ 초월" },
+  { key: "sanctuary_ludra", label: "🌟 루드라" },
+  { key: "sanctuary_bagot", label: "🌙 바고트" },
+  { key: "shop", label: "💎 오드(변환·상점)" },
+  { key: "corridor", label: "🏛 회랑" },
+  { key: "nightmare", label: "👁 악몽" },
+  { key: "awakening", label: "💫 각성전" },
+] as const;
+type ColKey = (typeof COL_DEFS)[number]["key"];
+type VisCols = Record<ColKey, boolean>;
 
 function groupByServer(chars: Character[]): { server: string; chars: Character[] }[] {
   const map: Record<string, Character[]> = {};
@@ -50,6 +67,12 @@ export default function SimplePage() {
   useEffect(() => subscribeSecondTick(() => setNowTick((n) => n + 1)), []);
 
   const [timerOpen, setTimerOpen] = useState(true);
+  const [cols, setCols] = useState(2); // 한 행에 표시할 계정 카드 수
+  const [visCols, setVisCols] = useState<VisCols>({
+    cpil: true, od: true,
+    expedition: true, transcend: true, sanctuary_ludra: true, sanctuary_bagot: true,
+    shop: true, corridor: true, nightmare: true, awakening: true,
+  });
   const [showReward, setShowReward] = useState(true);
   const [showBoss, setShowBoss] = useState(true);
   const [showDone, setShowDone] = useState(true);
@@ -113,6 +136,44 @@ export default function SimplePage() {
           <PillToggle on={showDone} onClick={() => setShowDone((v) => !v)} className="text-emerald-400 border-emerald-500/40 bg-emerald-500/10">
             <Check className="h-3 w-3" /> 완료
           </PillToggle>
+          <div className="inline-flex items-center rounded border overflow-hidden" title="한 행에 표시할 계정 카드 수">
+            <LayoutGrid className="h-3 w-3 mx-1.5 text-muted-foreground" />
+            {[1, 2, 3].map((n) => (
+              <button
+                key={n}
+                onClick={() => setCols(n)}
+                className={cn(
+                  "px-2 py-1 text-xs font-bold border-l transition-colors",
+                  cols === n ? "bg-cat-barrack/20 text-cat-barrack" : "text-muted-foreground hover:bg-accent/10"
+                )}
+              >
+                {n}
+              </button>
+            ))}
+          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              className="inline-flex items-center gap-1 px-2 py-1 rounded border text-xs font-bold text-muted-foreground hover:bg-accent/10"
+              title="표시 항목 선택"
+            >
+              <Settings2 className="h-3.5 w-3.5" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-40">
+              <div className="px-2 py-1 text-[10px] font-bold text-muted-foreground">표시 항목</div>
+              {COL_DEFS.map((c) => (
+                <button
+                  key={c.key}
+                  onClick={() => setVisCols((v) => ({ ...v, [c.key]: !v[c.key] }))}
+                  className="w-full flex items-center gap-2 px-2 py-1.5 text-xs hover:bg-accent/10 rounded-sm"
+                >
+                  <span className={cn("inline-flex h-3.5 w-3.5 items-center justify-center rounded border", visCols[c.key] ? "bg-cat-barrack/30 border-cat-barrack text-cat-barrack" : "border-border")}>
+                    {visCols[c.key] && <Check className="h-2.5 w-2.5" />}
+                  </span>
+                  <span className="font-bold">{c.label}</span>
+                </button>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded border border-gold/40 bg-gold/10 text-gold-light text-xs font-bold">
             전체 키나
             <span className="text-gold-light font-extrabold tabular-nums">💰 {fmtN(totalKina)}</span>
@@ -152,7 +213,10 @@ export default function SimplePage() {
       {accounts.length === 0 ? (
         <div className="text-center text-sm text-muted-foreground py-12 rounded-lg border bg-card">계정이 없습니다.</div>
       ) : (
-        <div className="space-y-3">
+        <div
+          className="grid gap-3 items-start"
+          style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
+        >
           {accounts.map((acc) => {
             const accChars = visibleChars.filter((c) => c.accountId === acc.id);
             const groups = groupByServer(accChars);
@@ -166,6 +230,7 @@ export default function SimplePage() {
                 showReward={showReward}
                 showBoss={showBoss}
                 showDone={showDone}
+                visCols={visCols}
               />
             ));
           })}
@@ -204,7 +269,7 @@ function TimerCell({ icon, label, ms }: { icon: string; label: string; ms: numbe
 }
 
 function AccountServerBlock({
-  acc, server, chars, showReward, showBoss, showDone,
+  acc, server, chars, showReward, showBoss, showDone, visCols,
 }: {
   acc: Account;
   server: string;
@@ -212,7 +277,9 @@ function AccountServerBlock({
   showReward: boolean;
   showBoss: boolean;
   showDone: boolean;
+  visCols: VisCols;
 }) {
+  const raids = RAID_DEF.filter((r) => visCols[r.key]);
   const sd = acc.servers?.[server];
   const db = useBarrackStore((s) => s.dbSettings);
   const patchServerData = useBarrackStore((s) => s.patchServerData);
@@ -282,20 +349,24 @@ function AccountServerBlock({
 
       {/* 캐릭터 테이블 */}
       <div className="overflow-x-auto">
-        <table className="w-full text-xs">
+        <table className="w-full table-fixed text-xs">
           <thead className="bg-muted/10 text-[10px] text-muted-foreground">
             <tr>
-              <th className="text-left px-2 py-1.5">캐릭터</th>
-              <th className="text-center px-2 py-1.5">CP<br/>IL</th>
-              <th className="text-center px-2 py-1.5">🔷 오드</th>
-              {RAID_DEF.map((r) => (
-                <th key={r.key} className="text-center px-2 py-1.5">{r.icon} {r.label}</th>
+              <th className="text-left px-2 py-1.5 w-[20%]">캐릭터</th>
+              {visCols.cpil && <th className="text-center px-2 py-1.5 w-[10%]">CP<br/>IL</th>}
+              {visCols.od && <th className="text-center px-2 py-1.5 w-[15%]">🔷 오드</th>}
+              {raids.map((r) => (
+                <th key={r.key} className="text-center px-2 py-1.5 w-[13.75%]">{r.icon} {r.label}</th>
               ))}
+              {visCols.shop && <th className="text-center px-1 py-1.5 w-[12%]">💎 오드</th>}
+              {visCols.corridor && <th className="text-center px-1 py-1.5 w-[10%]">🏛 회랑</th>}
+              {visCols.nightmare && <th className="text-center px-1 py-1.5 w-[8%]">👁 악몽</th>}
+              {visCols.awakening && <th className="text-center px-1 py-1.5 w-[8%]">💫 각성전</th>}
             </tr>
           </thead>
           <tbody>
             {chars.map((c) => (
-              <CharRow key={c.id} char={c} showReward={showReward} showBoss={showBoss} showDone={showDone} />
+              <CharRow key={c.id} char={c} showReward={showReward} showBoss={showBoss} showDone={showDone} visCols={visCols} />
             ))}
           </tbody>
         </table>
@@ -343,7 +414,7 @@ function CounterPill({ icon, label, value, done, onClick, onRightClick }: {
   );
 }
 
-function CharRow({ char: c, showReward, showBoss, showDone }: { char: Character; showReward: boolean; showBoss: boolean; showDone: boolean }) {
+function CharRow({ char: c, showReward, showBoss, showDone, visCols }: { char: Character; showReward: boolean; showBoss: boolean; showDone: boolean; visCols: VisCols }) {
   const accounts = useBarrackStore((s) => s.accounts);
   const db = useBarrackStore((s) => s.dbSettings);
   const doRaid = useBarrackStore((s) => s.doRaid);
@@ -355,34 +426,42 @@ function CharRow({ char: c, showReward, showBoss, showDone }: { char: Character;
   const odLow = odPct < 25;
   const odFull = odPct >= 100;
   const profileUrl = charProfileUrl(c, db);
+  const displayName = c.name.length > 6 ? c.name.slice(0, 6) + "…" : c.name;
 
   return (
     <tr className="border-t hover:bg-accent/5">
       {/* 캐릭터 */}
       <td className="px-2 py-1.5">
         <div className="flex items-center gap-1.5">
-          <span className="w-1 h-7 rounded" style={{ background: cls?.color }} />
-          <div className="flex flex-col items-center gap-0.5 min-w-[40px]">
-            {profileUrl ? (
-              <a href={profileUrl} target="_blank" rel="noopener noreferrer" className="text-base" title="아툴사이트" onClick={(e) => e.stopPropagation()} style={{ color: cls?.color }}>
-                {cls?.icon ?? "?"}
-              </a>
-            ) : (
-              <span className="text-base" style={{ color: cls?.color }}>{cls?.icon ?? "?"}</span>
-            )}
-            <span className="text-[9px] font-bold" style={{ color: cls?.color }}>{cls?.name ?? ""}</span>
+          <span className="w-1 h-9 rounded" style={{ background: cls?.color }} />
+          <div className="flex flex-col gap-0.5 min-w-0">
+            {/* 1행: 직업 아이콘 + 직업명 */}
+            <div className="flex items-center gap-1">
+              {profileUrl ? (
+                <a href={profileUrl} target="_blank" rel="noopener noreferrer" className="text-base leading-none" title="아툴사이트" onClick={(e) => e.stopPropagation()} style={{ color: cls?.color }}>
+                  {cls?.icon ?? "?"}
+                </a>
+              ) : (
+                <span className="text-base leading-none" style={{ color: cls?.color }}>{cls?.icon ?? "?"}</span>
+              )}
+              <span className="text-[10px] font-bold leading-none" style={{ color: cls?.color }}>{cls?.name ?? ""}</span>
+            </div>
+            {/* 2행: 캐릭터명 (6글자 제한 + 전체명 툴팁) */}
+            <span className="font-bold leading-none truncate" title={c.name}>{displayName}</span>
           </div>
-          <span className="font-bold truncate">{c.name}</span>
         </div>
       </td>
       {/* CP/IL */}
+      {visCols.cpil && (
       <td className="px-2 py-1.5 text-center">
         <div className="font-extrabold tabular-nums text-gold-light">{fmtN(c.cp || 0)}</div>
         <div className="text-[10px] text-muted-foreground tabular-nums">{c.itemLevel || "-"}</div>
       </td>
+      )}
       {/* 오드 */}
+      {visCols.od && (
       <td className="px-2 py-1.5">
-        <div className="flex flex-col items-center min-w-[100px]">
+        <div className="flex flex-col items-center min-w-0 w-full">
           <div className="w-full h-1 rounded bg-muted/30 overflow-hidden">
             <div
               className={cn("h-full transition-all", odFull ? "bg-emerald-400" : odLow ? "bg-rose-400" : "bg-cat-arcana")}
@@ -396,10 +475,15 @@ function CharRow({ char: c, showReward, showBoss, showDone }: { char: Character;
           </div>
         </div>
       </td>
+      )}
       {/* 레이드 */}
-      {RAID_DEF.map((r) => (
+      {RAID_DEF.filter((r) => visCols[r.key]).map((r) => (
         <RaidCell key={r.key} char={c} raidKey={r.key} doRaid={doRaid} showReward={showReward} showBoss={showBoss} showDone={showDone} />
       ))}
+      {visCols.shop && <ShopCellSimple char={c} />}
+      {visCols.corridor && <CorridorCellSimple char={c} />}
+      {visCols.nightmare && <NightmareCellSimple char={c} />}
+      {visCols.awakening && <AwakeningCellSimple char={c} />}
     </tr>
   );
 }
@@ -492,11 +576,120 @@ function RaidBox({
     <button
       onClick={(e) => { e.preventDefault(); onClick(); }}
       onContextMenu={(e) => { e.preventDefault(); onRightClick(); }}
-      className={cn("min-w-[36px] px-1.5 py-0.5 rounded border text-xs font-extrabold tabular-nums leading-tight", cls)}
+      className={cn("relative inline-flex items-center justify-center w-8 h-8 shrink-0 rounded border text-xs font-extrabold tabular-nums leading-none", cls)}
       title={`${title} (좌:-1 / 우:+1)`}
     >
       {value}
-      {extra > 0 && <sup className="text-[9px] text-cat-arcana ml-0.5">+{extra}</sup>}
+      {extra > 0 && <sup className="absolute top-0 right-0.5 text-[8px] text-cat-arcana">+{extra}</sup>}
     </button>
+  );
+}
+
+// 공통 정사각 미니 버튼 — 좌클릭/우클릭 핸들러, done 시 emerald
+function MiniBox({
+  label, value, extra = 0, done, onClick, onRightClick, title,
+}: {
+  label?: string;
+  value: number | string;
+  extra?: number;
+  done: boolean;
+  onClick: () => void;
+  onRightClick: () => void;
+  title: string;
+}) {
+  return (
+    <button
+      onClick={(e) => { e.preventDefault(); onClick(); }}
+      onContextMenu={(e) => { e.preventDefault(); onRightClick(); }}
+      className={cn(
+        "relative inline-flex flex-col items-center justify-center w-8 h-8 shrink-0 rounded border text-xs font-extrabold tabular-nums leading-none",
+        done ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40" : "bg-background/40 text-foreground border-border"
+      )}
+      title={title}
+    >
+      {label && <span className="text-[8px] font-bold opacity-60">{label}</span>}
+      <span>{value}</span>
+      {extra > 0 && <sup className="absolute top-0 right-0.5 text-[8px] text-cat-arcana">+{extra}</sup>}
+    </button>
+  );
+}
+
+// 오드(변환·상점) — 좌:사용(+1) / 우:반환(-1), 표시=잔여
+function ShopCellSimple({ char: c }: { char: Character }) {
+  const doShop = useBarrackStore((s) => s.doShop);
+  const db = useBarrackStore((s) => s.dbSettings);
+  if (c.hiddenContents?.shop) return <td className="px-1 py-1.5 text-center text-muted-foreground/50">[ − ]</td>;
+  const convMax = db.charConvert?.max ?? 4;
+  const buyMax = db.charBuy?.max ?? 4;
+  const conv = c.shop?.convert ?? 0;
+  const buy = c.shop?.buy ?? 0;
+  return (
+    <td className="px-1 py-1.5 text-center">
+      <div className="flex items-center justify-center gap-0.5">
+        <MiniBox label="변" value={Math.max(0, convMax - conv)} done={conv >= convMax}
+          onClick={() => doShop(c.id, "convert", +1)} onRightClick={() => doShop(c.id, "convert", -1)}
+          title={`변환 잔여 ${Math.max(0, convMax - conv)}/${convMax} (좌:사용 / 우:반환)`} />
+        <MiniBox label="상" value={Math.max(0, buyMax - buy)} done={buy >= buyMax}
+          onClick={() => doShop(c.id, "buy", +1)} onRightClick={() => doShop(c.id, "buy", -1)}
+          title={`상점 잔여 ${Math.max(0, buyMax - buy)}/${buyMax} (좌:사용 / 우:반환)`} />
+      </div>
+    </td>
+  );
+}
+
+// 회랑 — 좌:-1 / 우:+1, 표시=잔여(하층/중층)
+function CorridorCellSimple({ char: c }: { char: Character }) {
+  const doCorridor = useBarrackStore((s) => s.doCorridor);
+  if (c.hiddenContents?.corridor) return <td className="px-1 py-1.5 text-center text-muted-foreground/50">[ − ]</td>;
+  const cr = c.corridor ?? { lower: 0, lowerMax: 3, middle: 0, middleMax: 3 };
+  return (
+    <td className="px-1 py-1.5 text-center">
+      <div className="flex items-center justify-center gap-0.5">
+        <MiniBox label="하" value={cr.lower} done={cr.lower <= 0}
+          onClick={() => doCorridor(c.id, "lower", -1)} onRightClick={() => doCorridor(c.id, "lower", +1)}
+          title={`회랑 하층 ${cr.lower}/${cr.lowerMax} (좌:-1 / 우:+1)`} />
+        <MiniBox label="중" value={cr.middle} done={cr.middle <= 0}
+          onClick={() => doCorridor(c.id, "middle", -1)} onRightClick={() => doCorridor(c.id, "middle", +1)}
+          title={`회랑 중층 ${cr.middle}/${cr.middleMax} (좌:-1 / 우:+1)`} />
+      </div>
+    </td>
+  );
+}
+
+// 악몽 — 좌:-1 / 우:+1
+function NightmareCellSimple({ char: c }: { char: Character }) {
+  const doNightmare = useBarrackStore((s) => s.doNightmare);
+  const db = useBarrackStore((s) => s.dbSettings);
+  if (c.hiddenContents?.nightmare) return <td className="px-1 py-1.5 text-center text-muted-foreground/50">[ − ]</td>;
+  const tk = c.nightmare?.tickets ?? 0;
+  const tkEx = c.nightmare?.ticketsExtra ?? 0;
+  const max = db.nightmare?.maxTickets ?? 14;
+  return (
+    <td className="px-1 py-1.5 text-center">
+      <div className="flex items-center justify-center">
+        <MiniBox value={tk} extra={tkEx} done={tk + tkEx <= 0}
+          onClick={() => doNightmare(c.id, -1)} onRightClick={() => doNightmare(c.id, +1)}
+          title={`악몽 ${tk}/${max} (좌:소모 / 우:반환)`} />
+      </div>
+    </td>
+  );
+}
+
+// 각성전 — 좌:-1 / 우:+1
+function AwakeningCellSimple({ char: c }: { char: Character }) {
+  const doAwakening = useBarrackStore((s) => s.doAwakening);
+  const db = useBarrackStore((s) => s.dbSettings);
+  if (c.hiddenContents?.awakening) return <td className="px-1 py-1.5 text-center text-muted-foreground/50">[ − ]</td>;
+  const tk = c.awakening?.tickets ?? 0;
+  const tkEx = c.awakening?.ticketsExtra ?? 0;
+  const max = db.awakening?.weeklyTickets ?? 3;
+  return (
+    <td className="px-1 py-1.5 text-center">
+      <div className="flex items-center justify-center">
+        <MiniBox value={tk} extra={tkEx} done={tk + tkEx <= 0}
+          onClick={() => doAwakening(c.id, -1)} onRightClick={() => doAwakening(c.id, +1)}
+          title={`각성전 ${tk}/${max} (좌:소모 / 우:반환)`} />
+      </div>
+    </td>
   );
 }

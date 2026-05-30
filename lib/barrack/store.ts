@@ -25,6 +25,8 @@ type BarrackActions = {
   // 계정
   upsertAccount: (acc: Account) => void;
   removeAccount: (id: string) => void;
+  /** 계정 표시 순서 변경 — dir: -1 위로 / +1 아래로 */
+  moveAccount: (id: string, dir: -1 | 1) => void;
 
   // 캐릭터
   upsertCharacter: (c: Character) => void;
@@ -139,6 +141,17 @@ export const useBarrackStore = create<Store>()(
           accounts: s.accounts.filter((a) => a.id !== id),
           characters: s.characters.filter((c) => c.accountId !== id),
         })),
+
+      moveAccount: (id, dir) =>
+        set((s) => {
+          const idx = s.accounts.findIndex((a) => a.id === id);
+          if (idx < 0) return {};
+          const j = idx + dir;
+          if (j < 0 || j >= s.accounts.length) return {};
+          const next = s.accounts.slice();
+          [next[idx], next[j]] = [next[j], next[idx]];
+          return { accounts: next };
+        }),
 
       upsertCharacter: (c) =>
         set((s) => {

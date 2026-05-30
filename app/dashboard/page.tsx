@@ -40,6 +40,7 @@ function groupByServer(chars: Character[]): { server: string; chars: Character[]
 export default function DashboardPage() {
   useResetTick();
   const accounts = useBarrackStore((s) => s.accounts);
+  const moveAccount = useBarrackStore((s) => s.moveAccount);
   const characters = useBarrackStore((s) => s.characters);
   const characterOrder = useBarrackStore((s) => s.characterOrder);
   const setCharacterOrder = useBarrackStore((s) => s.setCharacterOrder);
@@ -209,15 +210,23 @@ export default function DashboardPage() {
             const accHidden = hiddenChars.filter((c) => c.accountId === acc.id);
             const groups = groupByServer(accVisible);
 
+            // 계정 순서 이동 — 전체뷰에서만, 계정 첫 서버바에 ▲▼ 노출
+            const accIndex = accounts.findIndex((a) => a.id === acc.id);
+            const canReorder = selectedAccId === "" && accounts.length > 1;
+            const moveUp = canReorder && accIndex > 0 ? () => moveAccount(acc.id, -1) : undefined;
+            const moveDown = canReorder && accIndex < accounts.length - 1 ? () => moveAccount(acc.id, +1) : undefined;
+
             return (
               <div key={acc.id} className="space-y-3">
                 {groups.length === 0 ? (
                   <AccountServerBar acc={acc} server="" chars={[]}
-                    onEditAcc={(id) => { setEditAccId(id); setAccDialogOpen(true); }} />
-                ) : groups.map(({ server, chars }) => (
+                    onEditAcc={(id) => { setEditAccId(id); setAccDialogOpen(true); }}
+                    onMoveUp={moveUp} onMoveDown={moveDown} />
+                ) : groups.map(({ server, chars }, gi) => (
                   <div key={server} className="space-y-2">
                     <AccountServerBar acc={acc} server={server} chars={chars}
-                      onEditAcc={(id) => { setEditAccId(id); setAccDialogOpen(true); }} />
+                      onEditAcc={(id) => { setEditAccId(id); setAccDialogOpen(true); }}
+                      onMoveUp={gi === 0 ? moveUp : undefined} onMoveDown={gi === 0 ? moveDown : undefined} />
                     <div className="space-y-1.5">
                       {chars.map((c) => (
                         <CharacterCard

@@ -1,6 +1,6 @@
 [package]
 name = "aion2-companion"
-version = "5.5.1"
+version = "5.5.5"
 description = "판다의 A2 통합 — AION2 컴패니언"
 authors = ["PandaA2"]
 edition = "2021"
