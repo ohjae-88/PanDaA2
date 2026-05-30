@@ -50,6 +50,24 @@ fn capture_primary_image() -> Result<RgbaImage, String> {
     RgbaImage::from_raw(w, h, raw).ok_or_else(|| "캡처 이미지 변환 실패".to_string())
 }
 
+/// 구분자(│ |) 앞부분 prefix 추출 — "AION2 │ 닉네임" → "AION2"
+fn title_prefix(s: &str) -> String {
+    s.split(|c| c == '│' || c == '|').next().unwrap_or(s).trim().to_string()
+}
+
+/// 창 제목 매칭: 완전 일치 → prefix(구분자 앞) 일치 → 부분 일치.
+/// 닉네임이 바뀌어도 "AION2 │ …" 형태면 동일 프로그램으로 인식.
+fn window_matches(wtitle: &str, target: &str) -> bool {
+    if wtitle == target {
+        return true;
+    }
+    let tp = title_prefix(target);
+    if tp.len() >= 2 && (wtitle == tp || wtitle.starts_with(&format!("{tp} ")) || title_prefix(wtitle) == tp) {
+        return true;
+    }
+    wtitle.contains(target)
+}
+
 /// 제목으로 창 찾아 캡처 → RgbaImage.
 /// 게임(DirectX) 창은 개별 창 캡처가 0x80070005(액세스 거부)로 막히므로,
 /// 창이 속한 모니터를 캡처한 뒤 창 사각형으로 크롭한다.
@@ -57,8 +75,7 @@ fn capture_window_image(title: &str) -> Result<RgbaImage, String> {
     let windows = xcap::Window::all().map_err(|e| format!("창 목록 조회 실패: {e}"))?;
     let win = windows
         .iter()
-        .find(|w| w.title() == title)
-        .or_else(|| windows.iter().find(|w| w.title().contains(title)))
+        .find(|w| window_matches(w.title(), title))
         .ok_or_else(|| format!("창을 찾을 수 없습니다: {title}"))?;
 
     let mon = win.current_monitor();
@@ -116,18 +133,14 @@ fn model_path(app: &AppHandle, rel: &str) -> Result<String, String> {
     Ok(p.to_string_lossy().to_string())
 }
 
-fn init_engine(app: &AppHandle) -> Result<OcrLite, String> {
-    let det = model_path(app, "ocr/det.onnx")?;
-    let cls = model_path(app, "ocr/cls.onnx")?;
-    let rec = model_path(app, "ocr/rec.onnx")?;
-    let dict = model_path(app, "ocr/korean_dict.txt")?;
+fn init_engine_paths(det: &str, cls: &str, rec: &str, dict: &str) -> Result<OcrLite, String> {
     let mut ocr = OcrLite::new();
-    ocr.init_models_with_dict(&det, &cls, &rec, &dict, 4)
+    ocr.init_models_with_dict(det, cls, rec, dict, 4)
         .map_err(|e| format!("OCR 모델 로드 실패: {e}"))?;
     Ok(ocr)
 }
 
-/// 크롭 이미지에 OCR 수행 → 라인 목록 (정렬 + 로깅)
+/// 크롭 이미지에 OCR 수행 → 라인 목록 (정렬 + 진단 로깅)
 fn ocr_on_image(
     app: &AppHandle,
     img: RgbaImage,
@@ -137,15 +150,40 @@ fn ocr_on_image(
     h: i32,
     source: &str,
 ) -> Result<Vec<OcrLine>, String> {
+    let (iw, ih) = (img.width(), img.height());
     let cropped = crop_region(&img, x, y, w, h);
+    let (cw, ch) = (cropped.width(), cropped.height());
     let rgb = image::DynamicImage::ImageRgba8(cropped).to_rgb8();
     let max_side = rgb.width().max(rgb.height()).max(1);
 
-    let mut engine = init_engine(app)?;
+    let det = model_path(app, "ocr/det.onnx").unwrap_or_default();
+    let cls = model_path(app, "ocr/cls.onnx").unwrap_or_default();
+    let rec = model_path(app, "ocr/rec.onnx").unwrap_or_default();
+    let dict = model_path(app, "ocr/korean_dict.txt").unwrap_or_default();
+    let ex = |p: &str| if std::path::Path::new(p).exists() { "O" } else { "X" };
+
+    let mut log = String::new();
+    log.push_str(&format!("# source: {source}\n"));
+    log.push_str(&format!("# capture: {iw}x{ih}  region(req): x={x} y={y} w={w} h={h}  crop: {cw}x{ch}\n"));
+    log.push_str(&format!("# det[{}] {det}\n# cls[{}] {cls}\n# rec[{}] {rec}\n# dict[{}] {dict}\n", ex(&det), ex(&cls), ex(&rec), ex(&dict)));
+
+    let mut engine = match init_engine_paths(&det, &cls, &rec, &dict) {
+        Ok(e) => e,
+        Err(e) => {
+            log.push_str(&format!("# ENGINE ERROR: {e}\n"));
+            save_ocr_log(&log);
+            return Err(e);
+        }
+    };
     // padding, max_side_len, box_score_thresh, box_thresh, un_clip_ratio, do_angle, most_angle
-    let result = engine
-        .detect(&rgb, 50, max_side, 0.5, 0.3, 1.6, true, true)
-        .map_err(|e| format!("OCR 인식 실패: {e}"))?;
+    let result = match engine.detect(&rgb, 50, max_side, 0.5, 0.3, 1.6, true, true) {
+        Ok(r) => r,
+        Err(e) => {
+            log.push_str(&format!("# DETECT ERROR: {e}\n"));
+            save_ocr_log(&log);
+            return Err(format!("OCR 인식 실패: {e}"));
+        }
+    };
 
     let mut lines: Vec<OcrLine> = result
         .text_blocks
@@ -176,19 +214,22 @@ fn ocr_on_image(
         })
         .collect();
     lines.sort_by(|a, b| a.y.partial_cmp(&b.y).unwrap_or(std::cmp::Ordering::Equal));
-    write_ocr_log(&lines, source);
+
+    log.push_str(&format!("# lines: {}\n", lines.len()));
+    for l in &lines {
+        log.push_str(&format!("[y={:.0} x={:.0}] {}\n", l.y, l.x, l.text));
+    }
+    save_ocr_log(&log);
     Ok(lines)
 }
 
-/// OCR 원문 로그 — debug 빌드 전용 (<project>/OCR_Log). 릴리스에서는 no-op.
-#[cfg(debug_assertions)]
-fn write_ocr_log(lines: &[OcrLine], source: &str) {
-    use std::io::Write;
-    // CARGO_MANIFEST_DIR = src-tauri → 부모 = 프로젝트 루트
-    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .map(|p| p.join("OCR_Log"));
-    let Some(dir) = dir else { return };
+/// OCR 진단 로그 저장 — 설치 폴더(exe 경로)/OCR_Log, 최근 5개 유지.
+/// 릴리스에서도 동작 (배포본 문제 진단용).
+fn save_ocr_log(content: &str) {
+    let dir = match std::env::current_exe().ok().and_then(|p| p.parent().map(|d| d.join("OCR_Log"))) {
+        Some(d) => d,
+        None => return,
+    };
     if std::fs::create_dir_all(&dir).is_err() {
         return;
     }
@@ -196,17 +237,27 @@ fn write_ocr_log(lines: &[OcrLine], source: &str) {
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_millis())
         .unwrap_or(0);
-    let path = dir.join(format!("ocr_{ts}.txt"));
-    if let Ok(mut f) = std::fs::File::create(&path) {
-        let _ = writeln!(f, "# source: {source}");
-        let _ = writeln!(f, "# lines: {}", lines.len());
-        for l in lines {
-            let _ = writeln!(f, "[y={:.0} x={:.0}] {}", l.y, l.x, l.text);
+    let _ = std::fs::write(dir.join(format!("ocr_{ts}.txt")), content);
+
+    // 최근 5개만 유지 (파일명 ts 정렬 = 시간순)
+    if let Ok(rd) = std::fs::read_dir(&dir) {
+        let mut files: Vec<std::path::PathBuf> = rd
+            .flatten()
+            .map(|e| e.path())
+            .filter(|p| {
+                p.file_name()
+                    .and_then(|n| n.to_str())
+                    .map(|n| n.starts_with("ocr_") && n.ends_with(".txt"))
+                    .unwrap_or(false)
+            })
+            .collect();
+        files.sort();
+        let excess = files.len().saturating_sub(5);
+        for f in files.into_iter().take(excess) {
+            let _ = std::fs::remove_file(f);
         }
     }
 }
-#[cfg(not(debug_assertions))]
-fn write_ocr_log(_lines: &[OcrLine], _source: &str) {}
 
 // ── Tauri 커맨드 ──────────────────────────────────────
 
