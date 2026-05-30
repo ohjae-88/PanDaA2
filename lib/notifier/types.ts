@@ -20,6 +20,8 @@ export type NotifierItem = {
   notifyEnabled: boolean;
   notifyBeforeMin: number;
   important?: boolean;
+  /** OCR 화면 동기화 매칭용 이름 — 미설정 시 name 사용 (게임 표기가 다를 때 수정) */
+  ocrName?: string;
   /** 사용자설정 표시 모드에서 숨김 (별도 보이기/숨기기 토글) */
   displayHidden?: boolean;
   /** 소속 그룹 ID 목록 (다중 그룹 지원) */

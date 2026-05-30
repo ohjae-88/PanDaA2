@@ -25,6 +25,9 @@ src-tauri/gen
 세이브파일/
 diag/
 
+# OCR 디버그 로그 (빌드 검증용, debug 빌드에서만 생성)
+OCR_Log/
+
 # 에디터
 .vscode/
 .idea/

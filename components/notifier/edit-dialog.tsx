@@ -81,9 +81,11 @@ export function NotifierEditDialog({ open, itemId, onClose }: Props) {
       toast.error("보스명을 입력하세요.");
       return;
     }
+    const ocrName = draft.ocrName?.trim();
     const final: NotifierItem = {
       ...draft,
       name: draft.name.trim(),
+      ocrName: ocrName ? ocrName : undefined,
       type: draft.type.trim(),
       area: draft.area.trim(),
       tier: Number(draft.tier) || 1,
@@ -113,6 +115,14 @@ export function NotifierEditDialog({ open, itemId, onClose }: Props) {
           <div className="space-y-1 col-span-2">
             <Label className="text-xs text-muted-foreground">보스명</Label>
             <Input value={draft.name} onChange={(e) => patch("name", e.target.value)} />
+          </div>
+          <div className="space-y-1 col-span-2">
+            <Label className="text-xs text-muted-foreground">OCR 매칭 이름 (화면 동기화용 · 비우면 보스명 사용)</Label>
+            <Input
+              value={draft.ocrName ?? ""}
+              onChange={(e) => patch("ocrName", e.target.value)}
+              placeholder={draft.name || "게임 화면 표기명"}
+            />
           </div>
           <div className="space-y-1 col-span-2">
             <Label className="text-xs text-muted-foreground">지역</Label>

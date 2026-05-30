@@ -46,6 +46,12 @@
   "bundle": {
     "active": true,
     "targets": ["nsis"],
+    "resources": {
+      "resources/ocr/det.onnx": "ocr/det.onnx",
+      "resources/ocr/cls.onnx": "ocr/cls.onnx",
+      "resources/ocr/rec.onnx": "ocr/rec.onnx",
+      "resources/ocr/korean_dict.txt": "ocr/korean_dict.txt"
+    },
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

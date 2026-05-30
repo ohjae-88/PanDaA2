@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useEffect } from "react";
 import Link from "next/link";
-import { Bell, BellOff, GripVertical, Settings } from "lucide-react";
+import { Bell, BellOff, GripVertical, Settings, ScanLine } from "lucide-react";
 import {
   useNotifierStore,
   sortGroupItems,
@@ -18,6 +18,7 @@ import type { NotifierGroup, NotifierItem } from "@/lib/notifier/types";
 import { NotifierEditDialog } from "@/components/notifier/edit-dialog";
 import { NotifierTimeInputDialog } from "@/components/notifier/time-input-dialog";
 import { NotifierBulkAlertDialog } from "@/components/notifier/bulk-alert-dialog";
+import { OcrSyncDialog } from "@/components/notifier/ocr-sync-dialog";
 import { NotifierAlertModal } from "@/components/notifier/alert-modal";
 import { CombinedAlertModal } from "@/components/notifier/combined-alert-modal";
 import { ServerClockBadge } from "@/components/notifier/server-clock-badge";
@@ -41,6 +42,7 @@ export default function NotifierPage() {
   const [timeOpen, setTimeOpen] = useState(false);
   const [timeId, setTimeId] = useState<string | null>(null);
   const [bulkOpen, setBulkOpen] = useState(false);
+  const [ocrOpen, setOcrOpen] = useState(false);
 
   // Hydration guard — Zustand persist hydrates client-side only
   const [hydrated, setHydrated] = useState(false);
@@ -288,6 +290,9 @@ export default function NotifierPage() {
           <Button size="sm" onClick={() => setBulkOpen(true)}>
             <Bell className="h-4 w-4" /> 알림 편집
           </Button>
+          <Button size="sm" variant="ghost" onClick={() => setOcrOpen(true)} title="게임 화면 보스 목록을 인식해 잔여시간 동기화">
+            <ScanLine className="h-4 w-4" /> 화면 동기화
+          </Button>
           <Link href="/notifier/settings" className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-bold rounded-md border hover:bg-accent/10">
             <Settings className="h-3 w-3" /> 설정
           </Link>
@@ -391,6 +396,7 @@ export default function NotifierPage() {
       <NotifierEditDialog open={editOpen} itemId={editId} onClose={() => setEditOpen(false)} />
       <NotifierTimeInputDialog open={timeOpen} itemId={timeId} onClose={() => setTimeOpen(false)} />
       <NotifierBulkAlertDialog open={bulkOpen} onClose={() => setBulkOpen(false)} />
+      <OcrSyncDialog open={ocrOpen} onClose={() => setOcrOpen(false)} />
       <NotifierAlertModal />
       <CombinedAlertModal />
     </div>

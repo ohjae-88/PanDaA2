@@ -1,3 +1,5 @@
+mod ocr;
+
 use tauri::{Emitter, Manager, WebviewWindowBuilder, WebviewUrl, LogicalSize, LogicalPosition, WindowEvent};
 use tauri::tray::{TrayIconBuilder, MouseButton, MouseButtonState, TrayIconEvent};
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, CheckMenuItem};
@@ -584,6 +586,8 @@ pub fn run() {
                     tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::LogDir { file_name: None }),
                 ])
                 .level(log::LevelFilter::Info)
+                // xcap 창 열거 시 보호된 창 접근 거부(0x80070005) 노이즈 억제 — 비치명적
+                .level_for("xcap", log::LevelFilter::Off)
                 .max_file_size(2_000_000) // 2MB cap — rotation
                 .rotation_strategy(tauri_plugin_log::RotationStrategy::KeepAll)
                 .build(),
@@ -734,6 +738,11 @@ pub fn run() {
             open_download_folder,
             save_update_error_log,
             reveal_in_explorer,
+            ocr::ocr_capture_primary,
+            ocr::ocr_region,
+            ocr::ocr_list_windows,
+            ocr::ocr_capture_window,
+            ocr::ocr_region_window,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
