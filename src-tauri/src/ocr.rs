@@ -205,7 +205,8 @@ fn ocr_on_image(
                 maxy = 0.0;
             }
             OcrLine {
-                text: b.text.clone(),
+                // dict가 CRLF면 키마다 \r이 붙어 글자 사이 제어문자 삽입됨 → 제거
+                text: b.text.chars().filter(|c| !c.is_control()).collect::<String>(),
                 x: minx,
                 y: miny,
                 w: (maxx - minx).max(0.0),

@@ -1,0 +1,5 @@
+# ONNX 모델 — 바이너리, 줄바꿈 변환 금지
+*.onnx binary
+
+# OCR 한국어 사전 — 반드시 LF 유지 (CRLF면 paddle-ocr-rs 키마다 \r 삽입되어 인식 깨짐)
+src-tauri/resources/ocr/korean_dict.txt text eol=lf
