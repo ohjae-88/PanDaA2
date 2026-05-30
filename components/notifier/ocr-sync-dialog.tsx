@@ -114,13 +114,13 @@ export function OcrSyncDialog({ open, onClose }: Props) {
               <span className="text-rose-400 font-bold">미지정</span>
             )}
             <Button size="sm" variant="ghost" className="ml-auto" onClick={() => setRegionOpen(true)}>
-              {region ? "영역 재지정" : "영역 지정"}
+              {region ? "① 대상·영역 재지정" : "① 대상·영역 지정"}
             </Button>
           </div>
 
           <div className="flex gap-2">
             <Button size="sm" onClick={handleRun} disabled={running || !region}>
-              {running ? "인식 중…" : "동기화 실행"}
+              {running ? "인식 중…" : "② 동기화 실행"}
             </Button>
           </div>
 
@@ -161,7 +161,7 @@ export function OcrSyncDialog({ open, onClose }: Props) {
 
           <DialogFooter>
             <Button onClick={handleApply} disabled={!results || matchedCount === 0}>
-              적용 ({matchedCount})
+              ③ 적용 ({matchedCount})
             </Button>
             <Button variant="ghost" onClick={onClose}>닫기</Button>
           </DialogFooter>

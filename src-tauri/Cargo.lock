@@ -46,7 +46,7 @@ dependencies = [
 
 [[package]]
 name = "aion2-companion"
-version = "5.5.7"
+version = "5.5.8"
 dependencies = [
  "base64 0.22.1",
  "image",
@@ -66,6 +66,7 @@ dependencies = [
  "tauri-plugin-updater",
  "tokio",
  "url",
+ "windows 0.58.0",
  "xcap",
 ]
 

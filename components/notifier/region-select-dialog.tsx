@@ -164,7 +164,7 @@ export function RegionSelectDialog({ open, onClose }: Props) {
         ) : (
           <div className="space-y-2">
             <div className="flex items-center gap-2 text-xs flex-wrap">
-              <span className="text-muted-foreground font-bold">1) 대상 프로그램</span>
+              <span className="text-muted-foreground font-bold">① 대상 프로그램</span>
               <select
                 value={target}
                 onChange={(e) => setTarget(e.target.value)}
@@ -177,10 +177,10 @@ export function RegionSelectDialog({ open, onClose }: Props) {
                   </option>
                 ))}
               </select>
-              <Button size="sm" onClick={() => doCapture(target)}>화면 불러오기</Button>
-              <Button size="sm" onClick={handleSave} disabled={!cap || !rect || rect.w < 4}>영역 저장</Button>
+              <Button size="sm" onClick={() => doCapture(target)}>② 화면 불러오기</Button>
+              <Button size="sm" onClick={handleSave} disabled={!cap || !rect || rect.w < 4}>④ 영역 저장</Button>
               <Button size="sm" variant="ghost" onClick={onClose}>취소</Button>
-              <span className="text-muted-foreground">2) 드래그로 영역 지정 · 모서리/변으로 크기 조절 · 안쪽 드래그로 이동</span>
+              <span className="text-muted-foreground">③ 드래그로 영역 지정 · 모서리/변으로 크기 조절 · 안쪽 드래그로 이동</span>
             </div>
 
             {loading ? (

@@ -1,6 +1,6 @@
 [package]
 name = "aion2-companion"
-version = "5.5.8"
+version = "5.5.9"
 description = "판다의 A2 통합 — AION2 컴패니언"
 authors = ["PandaA2"]
 edition = "2021"
@@ -39,6 +39,11 @@ base64 = "0.22"
 paddle-ocr-rs = "0.6"
 # paddle-ocr-rs 0.6.1은 ort rc.10 API 기준 — rc.12로 올라가면 빌드 깨짐. 정확히 핀.
 ort = "=2.0.0-rc.10"
+
+# 대상 창 전면화(폴백 캡처 시 다른 창 가림 방지)
+[target.'cfg(windows)'.dependencies.windows]
+version = "0.58"
+features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging"]
 
 [features]
 # 향후 인게임 오버레이 기능 활성화 시 사용

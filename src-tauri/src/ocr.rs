@@ -68,9 +68,43 @@ fn window_matches(wtitle: &str, target: &str) -> bool {
     wtitle.contains(target)
 }
 
+/// 대상 창을 전면으로 올림 (폴백 모니터-크롭 시 다른 창 가림 방지). Windows 전용 best-effort.
+#[cfg(windows)]
+fn raise_window(id: u32) {
+    use windows::Win32::Foundation::HWND;
+    use windows::Win32::UI::WindowsAndMessaging::{
+        BringWindowToTop, SetForegroundWindow, ShowWindow, SW_RESTORE,
+    };
+    let hwnd = HWND(id as usize as *mut core::ffi::c_void);
+    unsafe {
+        let _ = ShowWindow(hwnd, SW_RESTORE);
+        let _ = BringWindowToTop(hwnd);
+        let _ = SetForegroundWindow(hwnd);
+    }
+}
+#[cfg(not(windows))]
+fn raise_window(_id: u32) {}
+
+/// 거의 검은 이미지인지 — DirectX 창 단독 캡처 실패 시 PrintWindow가 검은 화면 반환.
+fn looks_blank(img: &RgbaImage) -> bool {
+    let data = img.as_raw();
+    let mut nonzero = 0u32;
+    let mut i = 0usize;
+    while i + 2 < data.len() {
+        if data[i] > 8 || data[i + 1] > 8 || data[i + 2] > 8 {
+            nonzero += 1;
+            if nonzero > 50 {
+                return false;
+            }
+        }
+        i += 4 * 97; // 샘플링
+    }
+    true
+}
+
 /// 제목으로 창 찾아 캡처 → RgbaImage.
-/// 게임(DirectX) 창은 개별 창 캡처가 0x80070005(액세스 거부)로 막히므로,
-/// 창이 속한 모니터를 캡처한 뒤 창 사각형으로 크롭한다.
+/// 1) 창 단독 캡처(다른 창에 가려도 해당 창만) 우선.
+/// 2) 실패/검은화면(게임 DirectX 등)이면 → 창을 전면으로 올린 뒤 모니터 캡처 → 창 영역 크롭.
 fn capture_window_image(title: &str) -> Result<RgbaImage, String> {
     let windows = xcap::Window::all().map_err(|e| format!("창 목록 조회 실패: {e}"))?;
     let win = windows
@@ -78,13 +112,27 @@ fn capture_window_image(title: &str) -> Result<RgbaImage, String> {
         .find(|w| window_matches(w.title(), title))
         .ok_or_else(|| format!("창을 찾을 수 없습니다: {title}"))?;
 
+    // 1) 창 단독 캡처 — occlusion-free. 검은화면이면 폴백.
+    if let Ok(shot) = win.capture_image() {
+        let (w, h) = (shot.width(), shot.height());
+        if w > 4 && h > 4 {
+            let raw: Vec<u8> = shot.into_raw();
+            if let Some(img) = RgbaImage::from_raw(w, h, raw) {
+                if !looks_blank(&img) {
+                    return Ok(img);
+                }
+            }
+        }
+    }
+
+    // 2) 폴백 — 전면화 후 모니터 캡처 → 창 영역 크롭
+    raise_window(win.id());
+    std::thread::sleep(std::time::Duration::from_millis(250));
     let mon = win.current_monitor();
     let shot = mon.capture_image().map_err(|e| format!("화면 캡처 실패: {e}"))?;
     let (mw, mh) = (shot.width(), shot.height());
     let raw: Vec<u8> = shot.into_raw();
     let mon_img = RgbaImage::from_raw(mw, mh, raw).ok_or_else(|| "캡처 이미지 변환 실패".to_string())?;
-
-    // 창 영역 = 창 좌표 - 모니터 좌표 (모니터-상대 픽셀)
     let ox = win.x() - mon.x();
     let oy = win.y() - mon.y();
     Ok(crop_region(&mon_img, ox, oy, win.width() as i32, win.height() as i32))
@@ -312,6 +360,10 @@ pub fn ocr_region_window(
         return Err("영역 크기가 올바르지 않습니다.".into());
     }
     let img = capture_window_image(&title)?;
+    // 폴백 캡처 시 대상 창을 전면화했을 수 있음 → 우리 메인 창으로 포커스 복귀 (결과 표시)
+    if let Some(win) = app.get_webview_window("main") {
+        let _ = win.set_focus();
+    }
     ocr_on_image(&app, img, x, y, w, h, &format!("window:{title}"))
 }
 
