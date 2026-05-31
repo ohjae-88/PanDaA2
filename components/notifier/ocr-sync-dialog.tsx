@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Button } from "@/components/ui/button";
 import { useNotifierStore } from "@/lib/notifier/store";
 import { serverNow } from "@/lib/notifier/time-sync";
-import { useOcrStore, ocrRegion, ocrRegionWindow } from "@/lib/notifier/ocr-store";
+import { useOcrStore, ocrRegion, ocrRegionWindow, listWindows, extractPrefix, DEFAULT_OCR_REGION } from "@/lib/notifier/ocr-store";
 import { parseOcrLines, matchEntries, type SyncMatch } from "@/lib/notifier/ocr-sync";
 import { isTauri } from "@/lib/tauri";
 import { toast } from "@/lib/util/toast";
@@ -26,7 +26,8 @@ export function OcrSyncDialog({ open, onClose }: Props) {
   const items = useNotifierStore((s) => s.items);
   const setLastSpawnTs = useNotifierStore((s) => s.setLastSpawnTs);
   const region = useOcrStore((s) => s.region);
-  const windowTitle = useOcrStore((s) => s.windowTitle);
+  const windowPrefix = useOcrStore((s) => s.windowPrefix);
+  const previewBase64 = useOcrStore((s) => s.previewBase64);
 
   const [running, setRunning] = useState(false);
   const [results, setResults] = useState<SyncMatch[] | null>(null);
@@ -44,8 +45,15 @@ export function OcrSyncDialog({ open, onClose }: Props) {
     const ts0 = serverNow();
     setCapturedAt(ts0);
     try {
-      const lines = windowTitle
-        ? await ocrRegionWindow(windowTitle, region)
+      // prefix로 현재 창 재탐색 — 캐릭터명 변경 대응
+      let resolvedTitle: string | null = null;
+      if (windowPrefix) {
+        const wins = await listWindows();
+        const match = wins?.find((w) => extractPrefix(w.title) === windowPrefix || extractPrefix(w.title).startsWith(windowPrefix));
+        resolvedTitle = match?.title ?? windowPrefix; // 못 찾으면 prefix 그대로 Rust에 전달(Rust가 포함 매칭)
+      }
+      const lines = resolvedTitle
+        ? await ocrRegionWindow(resolvedTitle, region)
         : await ocrRegion(region);
       if (!lines) { toast.error("OCR 호출 실패"); return; }
       const entries = parseOcrLines(lines);
@@ -99,24 +107,59 @@ export function OcrSyncDialog({ open, onClose }: Props) {
       <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>🎯 화면에서 잔여시간 동기화</DialogTitle>
+            <DialogTitle>📷 캡처 — 보스 잔여시간 동기화</DialogTitle>
           </DialogHeader>
 
-          <div className="flex items-center gap-2 text-xs">
+          <div className="flex items-center gap-2 text-xs flex-wrap">
+            <Button size="sm" onClick={() => setRegionOpen(true)}>
+              ① 캡처 영역 설정
+            </Button>
             <span className="text-muted-foreground">대상:</span>
-            <span className="font-bold truncate max-w-[40%]">{windowTitle ?? "주 모니터(폴백)"}</span>
+            <span className="font-bold truncate max-w-[35%]">{windowPrefix ?? "주 모니터(폴백)"}</span>
             <span className="text-muted-foreground">영역:</span>
             {region ? (
               <span className="tabular-nums font-bold">
-                {Math.round(region.x)},{Math.round(region.y)} · {Math.round(region.w)}×{Math.round(region.h)}
+                {Math.round(region.w)}×{Math.round(region.h)}
+                {region.x === DEFAULT_OCR_REGION.x && region.y === DEFAULT_OCR_REGION.y &&
+                 region.w === DEFAULT_OCR_REGION.w && region.h === DEFAULT_OCR_REGION.h && (
+                  <span className="ml-1 text-[10px] text-muted-foreground font-normal">(기본)</span>
+                )}
               </span>
             ) : (
               <span className="text-rose-400 font-bold">미지정</span>
             )}
-            <Button size="sm" variant="ghost" className="ml-auto" onClick={() => setRegionOpen(true)}>
-              {region ? "① 대상·영역 재지정" : "① 대상·영역 지정"}
-            </Button>
           </div>
+
+          {/* 썸네일: 설정된 캡처 영역 미리보기 OR 최초 가이드 이미지 */}
+          {previewBase64 ? (
+            <div className="rounded border overflow-hidden">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={previewBase64} alt="캡처 영역 미리보기" className="block w-full h-auto" />
+              <div className="px-2 py-1 text-[10px] text-muted-foreground bg-muted/20">
+                ↑ 이전 설정 화면 · 주황 박스 = 캡처 영역 (재설정 필요 시 ① 클릭)
+              </div>
+            </div>
+          ) : (
+            <div className="rounded border overflow-hidden">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/images/ocr-guide.jpg"
+                alt="캡처 영역 설정 예시"
+                className="block w-full h-auto"
+                onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+              />
+              <div className="px-3 py-2 bg-amber-500/10 border-t border-amber-500/20 flex items-start gap-2">
+                <span className="text-amber-400 text-sm mt-0.5 shrink-0">📷</span>
+                <div>
+                  <div className="text-xs font-bold text-amber-400">캡처 영역 설정 예시</div>
+                  <div className="text-[10px] text-muted-foreground leading-relaxed mt-0.5">
+                    게임에서 지도를 열면 좌측에 보스 목록이 표시됩니다.<br />
+                    ① 버튼 → 대상 프로그램 선택 → 화면 불러오기 → 보스 목록 영역 드래그 → 저장
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           <div className="flex gap-2">
             <Button size="sm" onClick={handleRun} disabled={running || !region}>

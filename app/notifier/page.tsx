@@ -243,8 +243,16 @@ export default function NotifierPage() {
         <h1 className="text-2xl font-extrabold flex items-center gap-2">
           <span>⏰</span> 알리미
         </h1>
-        <div className="flex-1 flex justify-center">
+        <div className="flex-1 flex justify-center items-center gap-2">
           <ServerClockBadge />
+          <button
+            onClick={() => setOcrOpen(true)}
+            title="게임 화면 보스 목록을 캡처·인식해 잔여시간 동기화"
+            className="inline-flex items-center justify-center gap-2 self-stretch px-4 rounded-lg border-2 border-cat-notifier/40 bg-card shadow-sm hover:bg-cat-notifier/10 transition-colors"
+          >
+            <ScanLine className="h-6 w-6 text-cat-notifier shrink-0" />
+            <span className="font-extrabold text-cat-notifier whitespace-nowrap">캡처 시간 동기화</span>
+          </button>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           {/* 레이아웃 토글 — 전체(3분할) / 구분(카테고리별) */}
@@ -289,9 +297,6 @@ export default function NotifierPage() {
           </div>
           <Button size="sm" onClick={() => setBulkOpen(true)}>
             <Bell className="h-4 w-4" /> 알림 편집
-          </Button>
-          <Button size="sm" variant="ghost" onClick={() => setOcrOpen(true)} title="게임 화면 보스 목록을 인식해 잔여시간 동기화">
-            <ScanLine className="h-4 w-4" /> 화면 동기화
           </Button>
           <Link href="/notifier/settings" className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-bold rounded-md border hover:bg-accent/10">
             <Settings className="h-3 w-3" /> 설정

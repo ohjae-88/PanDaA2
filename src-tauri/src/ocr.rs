@@ -85,10 +85,17 @@ fn raise_window(id: u32) {
 #[cfg(not(windows))]
 fn raise_window(_id: u32) {}
 
+/// 메인 Tauri 창을 전면으로 복귀. 캡처 완료 후 호출.
+fn restore_main_window(app: &AppHandle) {
+    if let Some(win) = app.get_webview_window("main") {
+        let _ = win.set_focus();
+    }
+}
+
 /// 제목으로 창 찾아 캡처 → RgbaImage.
 /// 게임(DirectX) 창 단독 캡처는 검은화면이 되므로, 대상 창을 전면으로 올린 뒤
-/// 모니터를 캡처하고 창 영역만 크롭한다 (전면화 → 다른 창 가림 방지).
-fn capture_window_image(title: &str) -> Result<RgbaImage, String> {
+/// 모니터를 캡처하고 창 영역만 크롭한다. 캡처 후 메인창 복귀.
+fn capture_window_image(app: &AppHandle, title: &str) -> Result<RgbaImage, String> {
     let windows = xcap::Window::all().map_err(|e| format!("창 목록 조회 실패: {e}"))?;
     let win = windows
         .iter()
@@ -105,7 +112,12 @@ fn capture_window_image(title: &str) -> Result<RgbaImage, String> {
     let mon_img = RgbaImage::from_raw(mw, mh, raw).ok_or_else(|| "캡처 이미지 변환 실패".to_string())?;
     let ox = win.x() - mon.x();
     let oy = win.y() - mon.y();
-    Ok(crop_region(&mon_img, ox, oy, win.width() as i32, win.height() as i32))
+    let result = crop_region(&mon_img, ox, oy, win.width() as i32, win.height() as i32);
+
+    // 캡처 완료 → 메인창 복귀
+    restore_main_window(app);
+
+    Ok(result)
 }
 
 /// region(이미지 기준)을 잘라낸 RgbaImage 반환.
@@ -302,10 +314,10 @@ pub fn ocr_list_windows() -> Result<Vec<WinInfo>, String> {
     Ok(out)
 }
 
-/// 지정 창 캡처 → PNG base64 (영역 지정 미리보기)
+/// 지정 창 캡처 → PNG base64 (영역 지정 미리보기). 캡처 후 메인창 복귀.
 #[tauri::command]
-pub fn ocr_capture_window(title: String) -> Result<CaptureResult, String> {
-    let img = capture_window_image(&title)?;
+pub fn ocr_capture_window(app: AppHandle, title: String) -> Result<CaptureResult, String> {
+    let img = capture_window_image(&app, &title)?;
     encode_capture(&img)
 }
 
@@ -329,11 +341,7 @@ pub fn ocr_region_window(
     if w <= 0 || h <= 0 {
         return Err("영역 크기가 올바르지 않습니다.".into());
     }
-    let img = capture_window_image(&title)?;
-    // 폴백 캡처 시 대상 창을 전면화했을 수 있음 → 우리 메인 창으로 포커스 복귀 (결과 표시)
-    if let Some(win) = app.get_webview_window("main") {
-        let _ = win.set_focus();
-    }
+    let img = capture_window_image(&app, &title)?;
     ocr_on_image(&app, img, x, y, w, h, &format!("window:{title}"))
 }
 

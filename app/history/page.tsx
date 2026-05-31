@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Download, Trash2, RefreshCw } from "lucide-react";
+import { Download, Trash2, RefreshCw, Pencil, Check, X } from "lucide-react";
 import { useBarrackStore } from "@/lib/barrack/store";
 import { subscribeSecondTick } from "@/lib/util/global-tick";
 import { CLASSES } from "@/lib/barrack/constants";
@@ -20,6 +20,13 @@ import {
   formatElapsed,
 } from "@/lib/barrack/content-log";
 import type { ContentChangeLog, RaidType } from "@/lib/barrack/types";
+
+/** ts → datetime-local 문자열 */
+function tsToLocal(ts: number): string {
+  const d = new Date(ts);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
 import { cn } from "@/lib/utils";
 import { ContentHistoryChart } from "@/components/barrack/history-chart";
 import { toast } from "@/lib/util/toast";
@@ -49,6 +56,14 @@ export default function HistoryPage() {
   const characters = useBarrackStore((s) => s.characters);
   const accounts = useBarrackStore((s) => s.accounts);
   const patch = useBarrackStore((s) => s.patchCharacter);
+  const updateLog = useBarrackStore((s) => s.updateContentLog);
+  const removeLog = useBarrackStore((s) => s.removeContentLog);
+
+  // 편집 중인 행 — key: `${charId}-${ts}-${idx}`
+  const [editKey, setEditKey] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState<ContentChangeLog & { tsStr: string }>({
+    raidKey: "expedition", target: "both", delta: -1, ts: 0, tsStr: "",
+  });
 
   const [hydrated, setHydrated] = useState(false);
   useEffect(() => setHydrated(true), []);
@@ -175,6 +190,21 @@ export default function HistoryPage() {
     }
   }
 
+  function startEdit(key: string, log: ContentChangeLog) {
+    setEditKey(key);
+    setEditDraft({ ...log, tsStr: tsToLocal(log.ts) });
+  }
+  function saveEdit(charId: string, oldTs: number) {
+    const ts = new Date(editDraft.tsStr).getTime();
+    if (isNaN(ts)) { toast.error("날짜 형식 오류"); return; }
+    updateLog(charId, oldTs, { raidKey: editDraft.raidKey, target: editDraft.target, delta: editDraft.delta, ts });
+    setEditKey(null);
+  }
+  async function deleteRow(charId: string, ts: number) {
+    if (!(await confirmDialog({ title: "기록 삭제", description: "이 기록 1건을 삭제합니다.", confirmText: "삭제", variant: "destructive" }))) return;
+    removeLog(charId, ts);
+  }
+
   // 필터된 행만 삭제
   async function handleClearFiltered() {
     if (!filtered.length) return;
@@ -238,7 +268,7 @@ export default function HistoryPage() {
       </div>
 
       {/* 진행 히스토리 차트 */}
-      <ContentHistoryChart days={14} />
+      <ContentHistoryChart days={7} />
 
       {/* 필터 바 */}
       <div className="flex items-center gap-2 flex-wrap text-xs">
@@ -306,21 +336,91 @@ export default function HistoryPage() {
             <thead className="bg-muted/40 sticky top-0 z-10">
               <tr>
                 <th className="text-left px-3 py-2 w-[170px]">시간</th>
-                <th className="text-left px-3 py-2 w-[110px]">경과</th>
-                <th className="text-left px-3 py-2 w-[120px]">계정</th>
+                <th className="text-left px-3 py-2 w-[100px]">경과</th>
+                <th className="text-left px-3 py-2 w-[110px]">계정</th>
                 <th className="text-left px-3 py-2">캐릭터</th>
                 <th className="text-left px-3 py-2 w-[90px]">콘텐츠</th>
-                <th className="text-left px-3 py-2 w-[130px]">적용</th>
+                <th className="text-left px-3 py-2 w-[120px]">적용</th>
+                <th className="px-2 py-2 w-[60px]"></th>
               </tr>
             </thead>
             <tbody>
               {filtered.length === 0 ? (
-                <tr><td colSpan={6} className="text-center text-muted-foreground py-8">기록이 없습니다.</td></tr>
+                <tr><td colSpan={7} className="text-center text-muted-foreground py-8">기록이 없습니다.</td></tr>
               ) : filtered.map((r, idx) => {
+                const key = `${r.charId}-${r.ts}-${idx}`;
+                const isEditing = editKey === key;
                 const action = actionLabel(r.log);
                 const isRefund = r.log.delta >= 0;
+                if (isEditing) {
+                  return (
+                    <tr key={key} className="border-t bg-accent/10">
+                      {/* 시간 편집 */}
+                      <td className="px-2 py-1" colSpan={2}>
+                        <input
+                          type="datetime-local"
+                          step="1"
+                          className="w-full rounded border bg-background px-1.5 py-0.5 text-xs tabular-nums"
+                          value={editDraft.tsStr}
+                          onChange={(e) => setEditDraft((d) => ({ ...d, tsStr: e.target.value }))}
+                        />
+                      </td>
+                      {/* 계정/캐릭터 (읽기전용) */}
+                      <td className="px-3 py-1 text-muted-foreground">{r.accName}</td>
+                      <td className="px-3 py-1 font-bold" style={{ color: r.classColor }}>{r.classIcon} {r.charName}</td>
+                      {/* 콘텐츠 */}
+                      <td className="px-2 py-1">
+                        <select
+                          className="w-full rounded border bg-background px-1 py-0.5 text-xs"
+                          value={editDraft.raidKey}
+                          onChange={(e) => setEditDraft((d) => ({ ...d, raidKey: e.target.value as ContentChangeLog["raidKey"] }))}
+                        >
+                          <option value="expedition">🗺 원정</option>
+                          <option value="transcend">⚡ 초월</option>
+                          <option value="sanctuary_ludra">✨ 루드라</option>
+                          <option value="sanctuary_bagot">🌙 바고트</option>
+                        </select>
+                      </td>
+                      {/* 적용 */}
+                      <td className="px-2 py-1">
+                        <div className="flex items-center gap-1">
+                          <select
+                            className="flex-1 rounded border bg-background px-1 py-0.5 text-xs"
+                            value={editDraft.target}
+                            onChange={(e) => setEditDraft((d) => ({ ...d, target: e.target.value as ContentChangeLog["target"] }))}
+                          >
+                            <option value="both">1회(보상+보스)</option>
+                            <option value="reward">보상</option>
+                            <option value="boss">보스</option>
+                          </select>
+                          <select
+                            className="w-[52px] rounded border bg-background px-1 py-0.5 text-xs"
+                            value={editDraft.delta}
+                            onChange={(e) => setEditDraft((d) => ({ ...d, delta: Number(e.target.value) }))}
+                          >
+                            <option value={-1}>사용</option>
+                            <option value={1}>환급</option>
+                          </select>
+                        </div>
+                      </td>
+                      {/* 저장/취소 */}
+                      <td className="px-2 py-1">
+                        <div className="flex items-center gap-1">
+                          <button onClick={() => saveEdit(r.charId, r.ts)} title="저장"
+                            className="p-1 rounded hover:bg-emerald-500/20 text-emerald-500">
+                            <Check className="h-3.5 w-3.5" />
+                          </button>
+                          <button onClick={() => setEditKey(null)} title="취소"
+                            className="p-1 rounded hover:bg-accent/20 text-muted-foreground">
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                }
                 return (
-                  <tr key={`${r.charId}-${r.ts}-${idx}`} className="border-t hover:bg-accent/5">
+                  <tr key={key} className="border-t hover:bg-accent/5 group">
                     <td className="px-3 py-1.5 tabular-nums text-muted-foreground">{fmtAbsTime(r.ts)}</td>
                     <td className="px-3 py-1.5 tabular-nums">{formatElapsed(Date.now() - r.ts)}</td>
                     <td className="px-3 py-1.5">{r.accName}</td>
@@ -330,6 +430,18 @@ export default function HistoryPage() {
                     <td className="px-3 py-1.5">{RAID_NAME_KO[r.log.raidKey as RaidType] ?? r.log.raidKey}</td>
                     <td className={cn("px-3 py-1.5 font-bold", isRefund ? "text-emerald-500" : "text-rose-400")}>
                       {action}
+                    </td>
+                    <td className="px-2 py-1.5">
+                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button onClick={() => startEdit(key, r.log)} title="편집"
+                          className="p-1 rounded hover:bg-accent/20 text-muted-foreground hover:text-foreground">
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
+                        <button onClick={() => deleteRow(r.charId, r.ts)} title="삭제"
+                          className="p-1 rounded hover:bg-destructive/20 text-muted-foreground hover:text-destructive">
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );

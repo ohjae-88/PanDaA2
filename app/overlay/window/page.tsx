@@ -31,14 +31,21 @@ const DEFAULT_COLLAPSED = { w: 280, h: 140 };
  * 잔여 시간 포맷 — 음수(이미 지난 시간)도 동일 형식 + `-` 접두.
  * 예: 30초 / -5초 / 1분 30초 / -2분 10초 / 1시간 5분
  */
-function fmtRemain(ms: number): { txt: string; secs: number } {
+/**
+ * showSecs=false (−, OFF): N시간 M분 / M분 SS초 / N초
+ * showSecs=true  (+, ON) : N시간 M분 SS초 / M분 SS초 / N초  ← h>0 에만 초 추가
+ */
+function fmtRemain(ms: number, showSecs = false): { txt: string; secs: number } {
   const totalSec = Math.trunc(ms / 1000);
   const sign = totalSec < 0 ? "-" : "";
   const abs = Math.abs(totalSec);
   const h = Math.floor(abs / 3600);
   const m = Math.floor((abs % 3600) / 60);
   const s = abs % 60;
-  if (h > 0) return { txt: `${sign}${h}시간 ${m}분`, secs: totalSec };
+  if (h > 0) {
+    if (showSecs) return { txt: `${sign}${h}시간 ${m}분 ${String(s).padStart(2, "0")}초`, secs: totalSec };
+    return { txt: `${sign}${h}시간 ${m}분`, secs: totalSec };
+  }
   if (m > 0) return { txt: `${sign}${m}분 ${String(s).padStart(2, "0")}초`, secs: totalSec };
   return { txt: `${sign}${s}초`, secs: totalSec };
 }
@@ -1096,6 +1103,9 @@ function NotifierPanel({ collapsed }: { collapsed: boolean }) {
     };
   }, []);
 
+  /** 잔여시간 초 단위 상세 표기 여부 (기본 ON) */
+  const [showSecs, setShowSecs] = useState(true);
+
   // DB 강제 새로고침 — localStorage에서 재읽기 (메인 프로그램에서 수정한 항목 즉시 반영)
   const [dbRefreshing, setDbRefreshing] = useState(false);
   async function handleDbRefresh() {
@@ -1178,6 +1188,19 @@ function NotifierPanel({ collapsed }: { collapsed: boolean }) {
             <Bell className="h-3 w-3 text-cat-notifier" />
             <span className="text-sm font-extrabold tabular-nums text-cat-notifier">{clock}</span>
           </div>
+          {/* 초 단위 표기 전환 버튼 — 서버시간 우측, DB버튼과 동일 높이, 정사각 */}
+          <button
+            onClick={() => setShowSecs((v) => !v)}
+            title={showSecs ? "초 단위 표기 ON — 클릭하여 OFF" : "초 단위 표기 OFF — 클릭하여 ON"}
+            className={cn(
+              "inline-flex items-center justify-center px-2 py-0.5 rounded border text-[10px] font-extrabold tabular-nums leading-none transition-colors shrink-0",
+              showSecs
+                ? "border-cat-notifier/50 bg-cat-notifier/20 text-cat-notifier hover:bg-cat-notifier/30"
+                : "border-border/30 bg-transparent text-muted-foreground/60 hover:bg-accent/10"
+            )}
+          >
+            {showSecs ? "+" : "−"}
+          </button>
         </div>
       )}
       <div className="flex-1 overflow-auto p-1.5 space-y-1">
@@ -1185,7 +1208,7 @@ function NotifierPanel({ collapsed }: { collapsed: boolean }) {
           <div className="text-center text-xs text-muted-foreground italic py-6">— 표시할 항목 없음 —</div>
         ) : (
           limited.map(({ item, remain }) => {
-            const { txt, secs } = fmtRemain(remain);
+            const { txt, secs } = fmtRemain(remain, showSecs);
             const isOverdue = remain < 0;
             const isImm = !isOverdue && secs < highlightSec;
             const isImportant = !!item.important;

@@ -4,7 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import {
-  capturePrimary, captureWindow, listWindows, useOcrStore,
+  capturePrimary, captureWindow, listWindows, useOcrStore, extractPrefix,
+  DEFAULT_OCR_REGION,
   type CaptureResult, type OcrRegion, type WinInfo,
 } from "@/lib/notifier/ocr-store";
 import { isTauri } from "@/lib/tauri";
@@ -23,11 +24,12 @@ const CURSOR: Record<Dir, string> = {
 
 export function RegionSelectDialog({ open, onClose }: Props) {
   const setRegion = useOcrStore((s) => s.setRegion);
-  const setWindowTitle = useOcrStore((s) => s.setWindowTitle);
-  const savedTitle = useOcrStore((s) => s.windowTitle);
+  const setWindowPrefix = useOcrStore((s) => s.setWindowPrefix);
+  const setPreviewBase64 = useOcrStore((s) => s.setPreviewBase64);
+  const savedPrefix = useOcrStore((s) => s.windowPrefix);
 
   const [windows, setWindows] = useState<WinInfo[]>([]);
-  const [target, setTarget] = useState<string>(PRIMARY);
+  const [target, setTarget] = useState<string>(PRIMARY); // 드롭다운 선택 = 전체 창 제목
   const [cap, setCap] = useState<CaptureResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [rect, setRect] = useState<Rect | null>(null);
@@ -38,19 +40,22 @@ export function RegionSelectDialog({ open, onClose }: Props) {
     if (!open) return;
     setRect(null);
     setCap(null);
-    setTarget(savedTitle ?? PRIMARY);
     if (!isTauri()) return;
     listWindows()
       .then((ws) => {
         const list = ws ?? [];
         setWindows(list);
-        if (!savedTitle) {
+        // 저장된 prefix로 현재 창 찾아 선택
+        if (savedPrefix) {
+          const match = list.find((w) => extractPrefix(w.title) === savedPrefix || w.title.startsWith(savedPrefix));
+          setTarget(match ? match.title : PRIMARY);
+        } else {
           const aion = list.find((w) => w.title.startsWith("AION") || w.title.includes("AION"));
-          if (aion) setTarget(aion.title);
+          setTarget(aion ? aion.title : PRIMARY);
         }
       })
       .catch(() => setWindows([]));
-  }, [open, savedTitle]);
+  }, [open, savedPrefix]);
 
   async function doCapture(t: string) {
     if (!isTauri()) return;
@@ -138,7 +143,30 @@ export function RegionSelectDialog({ open, onClose }: Props) {
     const scale = cap.width / img.clientWidth;
     const region: OcrRegion = { x: rect.x * scale, y: rect.y * scale, w: rect.w * scale, h: rect.h * scale };
     setRegion(region);
-    setWindowTitle(target === PRIMARY ? null : target);
+    setWindowPrefix(target === PRIMARY ? null : extractPrefix(target));
+
+    // 썸네일 생성 — 현재 표시 이미지(imgEl)에 영역 박스 그려 JPEG 저장 (최대 480px)
+    try {
+      const MAX_W = 480;
+      const dw = Math.min(img.clientWidth, MAX_W);
+      const dh = Math.round(img.clientHeight * (dw / img.clientWidth));
+      const ratio = dw / img.clientWidth;
+      const canvas = document.createElement("canvas");
+      canvas.width = dw;
+      canvas.height = dh;
+      const ctx = canvas.getContext("2d");
+      if (ctx) {
+        ctx.drawImage(img, 0, 0, dw, dh);
+        ctx.strokeStyle = "#fb923c";
+        ctx.lineWidth = 2;
+        ctx.strokeRect(rect.x * ratio, rect.y * ratio, rect.w * ratio, rect.h * ratio);
+        // 반투명 채우기
+        ctx.fillStyle = "rgba(251,146,60,0.15)";
+        ctx.fillRect(rect.x * ratio, rect.y * ratio, rect.w * ratio, rect.h * ratio);
+        setPreviewBase64(canvas.toDataURL("image/jpeg", 0.8));
+      }
+    } catch {}
+
     toast.success("캡처 대상·영역 저장됨");
     onClose();
   }
@@ -178,6 +206,7 @@ export function RegionSelectDialog({ open, onClose }: Props) {
                 ))}
               </select>
               <Button size="sm" onClick={() => doCapture(target)}>② 화면 불러오기</Button>
+              {savedPrefix && <span className="text-muted-foreground text-[10px]">저장: "{savedPrefix}*"</span>}
               <Button size="sm" onClick={handleSave} disabled={!cap || !rect || rect.w < 4}>④ 영역 저장</Button>
               <Button size="sm" variant="ghost" onClick={onClose}>취소</Button>
               <span className="text-muted-foreground">③ 드래그로 영역 지정 · 모서리/변으로 크기 조절 · 안쪽 드래그로 이동</span>
@@ -203,6 +232,21 @@ export function RegionSelectDialog({ open, onClose }: Props) {
                       className="block pointer-events-none"
                       style={{ maxHeight: "72vh", maxWidth: "100%", width: "auto", height: "auto" }}
                       draggable={false}
+                      onLoad={() => {
+                        // 드래그 선택 없을 때 기본 영역 박스 자동 표시 (물리px → 표시px)
+                        setRect((prev) => {
+                          if (prev && prev.w > 0) return prev;
+                          const img = imgRef.current;
+                          if (!img || !cap) return prev;
+                          const scale = img.clientWidth / cap.width;
+                          return {
+                            x: DEFAULT_OCR_REGION.x * scale,
+                            y: DEFAULT_OCR_REGION.y * scale,
+                            w: DEFAULT_OCR_REGION.w * scale,
+                            h: DEFAULT_OCR_REGION.h * scale,
+                          };
+                        });
+                      }}
                     />
                     {rect && rect.w > 0 && (
                       <>

@@ -34,6 +34,10 @@ type BarrackActions = {
   patchCharacter: (id: string, patch: Partial<Character>) => void;
   toggleCharHidden: (id: string) => void;
 
+  // 콘텐츠 변경 기록 편집
+  updateContentLog: (charId: string, oldTs: number, updated: import("./types").ContentChangeLog) => void;
+  removeContentLog: (charId: string, ts: number) => void;
+
   // 서버 데이터
   getServerData: (accId: string, server: string) => ServerData | undefined;
   patchServerData: (accId: string, server: string, patch: Partial<ServerData>) => void;
@@ -177,7 +181,25 @@ export const useBarrackStore = create<Store>()(
       removeCharacter: (id) =>
         set((s) => ({ characters: s.characters.filter((c) => c.id !== id) })),
 
+      updateContentLog: (charId, oldTs, updated) =>
+        set((s) => ({
+          characters: s.characters.map((c) => {
+            if (c.id !== charId) return c;
+            const log = (c.contentChangeLog ?? []).map((l) => l.ts === oldTs ? updated : l);
+            return { ...c, contentChangeLog: log };
+          }),
+        })),
+
+      removeContentLog: (charId, ts) =>
+        set((s) => ({
+          characters: s.characters.map((c) => {
+            if (c.id !== charId) return c;
+            return { ...c, contentChangeLog: (c.contentChangeLog ?? []).filter((l) => l.ts !== ts) };
+          }),
+        })),
+
       patchCharacter: (id, patch) =>
+
         set((s) => ({
           characters: s.characters.map((c) => (c.id === id ? { ...c, ...patch } : c)),
         })),

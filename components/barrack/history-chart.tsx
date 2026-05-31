@@ -6,153 +6,207 @@ import { RAID_NAME_KO } from "@/lib/barrack/content-log";
 import type { ContentChangeLog, RaidType } from "@/lib/barrack/types";
 
 /**
- * 컨텐츠 진행 히스토리 차트 — 의존성 없는 SVG 라인그래프.
+ * 컨텐츠 진행 히스토리 차트 — SVG 막대형 그래프.
  *
- * 데이터: 모든 캐릭터의 contentChangeLog (max 50/char) 통합 → 최근 N일 일별 컨텐츠 진행 횟수.
- * x축: 날짜, y축: 진행 수 (delta < 0 카운트, 환급 제외).
- * 4개 라인: 원정/초월/루드라/바고트.
+ * x축: 최근 7일, 요일(월화수…) + 일자(DD).
+ * y축: 정수, 5단위 주 그리드(라벨) + 1단위 보조 그리드(연한 선).
+ * 4개 그룹막대: 원정/초월/루드라/바고트 (delta < 0 카운트).
  */
 
-const RAIDS: { key: RaidType; color: string }[] = [
-  { key: "expedition",      color: "#60a5fa" }, // blue-400
-  { key: "transcend",       color: "#fbbf24" }, // amber-400
-  { key: "sanctuary_ludra", color: "#a78bfa" }, // violet-400
-  { key: "sanctuary_bagot", color: "#34d399" }, // emerald-400
+const RAIDS: { key: RaidType; color: string; name: string }[] = [
+  { key: "expedition",      color: "#60a5fa", name: "원정"  },
+  { key: "transcend",       color: "#fbbf24", name: "초월"  },
+  { key: "sanctuary_ludra", color: "#a78bfa", name: "루드라" },
+  { key: "sanctuary_bagot", color: "#34d399", name: "바고트" },
 ];
 
-const W = 640;
-const H = 220;
-const PAD_X = 36;
-const PAD_Y = 24;
+const KO_WD = ["일", "월", "화", "수", "목", "금", "토"];
+const DAYS = 7;
+
+const W = 600;
+const H = 240;
+const PAD_L = 40;  // y축 라벨 공간
+const PAD_R = 12;
+const PAD_T = 16;
+const PAD_B = 44;  // 요일 + 일자
+const BAR_N = RAIDS.length;          // 그룹당 막대 수
+const GROUP_GAP = 10;                // 그룹 간격
+const BAR_GAP = 2;                   // 막대 간격
 
 function ymd(ts: number): string {
   const d = new Date(ts);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-function daysAgoLabels(n: number): string[] {
-  const out: string[] = [];
+function last7Labels(): { ymd: string; wd: string; dd: string }[] {
+  const out = [];
   const now = Date.now();
-  for (let i = n - 1; i >= 0; i--) {
+  for (let i = DAYS - 1; i >= 0; i--) {
     const t = now - i * 86_400_000;
-    out.push(ymd(t));
+    const d = new Date(t);
+    out.push({
+      ymd: ymd(t),
+      wd: KO_WD[d.getDay()],
+      dd: String(d.getDate()).padStart(2, "0"),
+    });
   }
   return out;
 }
 
-type Series = Record<RaidType, number[]>;
-
-function aggregate(logs: ContentChangeLog[], days: number): { labels: string[]; series: Series } {
-  const labels = daysAgoLabels(days);
+function aggregate(logs: ContentChangeLog[], labels: string[]): Record<RaidType, number[]> {
   const idx = new Map(labels.map((l, i) => [l, i]));
-  const series: Series = {
-    expedition: new Array(days).fill(0),
-    transcend: new Array(days).fill(0),
-    sanctuary_ludra: new Array(days).fill(0),
-    sanctuary_bagot: new Array(days).fill(0),
+  const series: Record<RaidType, number[]> = {
+    expedition:      new Array(DAYS).fill(0),
+    transcend:       new Array(DAYS).fill(0),
+    sanctuary_ludra: new Array(DAYS).fill(0),
+    sanctuary_bagot: new Array(DAYS).fill(0),
   };
   for (const l of logs) {
-    // 진행만 카운트 — 환급(delta > 0) 제외, target=reward는 절반 가중치
-    if (l.delta >= 0) continue;
-    const day = ymd(l.ts);
-    const i = idx.get(day);
+    if (l.delta >= 0) continue; // 환급 제외
+    const i = idx.get(ymd(l.ts));
     if (i == null) continue;
-    const weight = l.target === "reward" ? 0.5 : 1;
-    if (l.raidKey in series) {
-      series[l.raidKey][i] += weight;
-    }
+    if (l.raidKey in series) series[l.raidKey][i] += 1;
   }
-  return { labels, series };
+  return series;
 }
 
-export function ContentHistoryChart({ days = 14 }: { days?: number }) {
+export function ContentHistoryChart({ days: _days = 7 }: { days?: number }) {
+  void _days; // 항상 7일 고정
+
   const characters = useBarrackStore((s) => s.characters);
 
   const { labels, series, yMax } = useMemo(() => {
+    const labels = last7Labels();
     const allLogs: ContentChangeLog[] = [];
     for (const c of characters) {
       if (c.contentChangeLog) allLogs.push(...c.contentChangeLog);
     }
-    const { labels, series } = aggregate(allLogs, days);
-    const max = Math.max(1, ...Object.values(series).flatMap((arr) => arr));
-    return { labels, series, yMax: Math.ceil(max) };
-  }, [characters, days]);
+    const series = aggregate(allLogs, labels.map((l) => l.ymd));
+    const max = Math.max(0, ...Object.values(series).flatMap((a) => a));
+    // yMax: 최솟값 5, 5 단위 올림
+    const yMax = max <= 0 ? 5 : Math.ceil(max / 5) * 5;
+    return { labels, series, yMax };
+  }, [characters]);
 
-  const innerW = W - PAD_X * 2;
-  const innerH = H - PAD_Y * 2;
-  const stepX = labels.length > 1 ? innerW / (labels.length - 1) : 0;
+  const innerW = W - PAD_L - PAD_R;
+  const innerH = H - PAD_T - PAD_B;
+  const groupW = innerW / DAYS;
+  const barAreaW = groupW - GROUP_GAP;
+  const barW = Math.max(2, (barAreaW - (BAR_N - 1) * BAR_GAP) / BAR_N);
 
-  function ptPath(arr: number[]): string {
-    return arr
-      .map((v, i) => {
-        const x = PAD_X + i * stepX;
-        const y = PAD_Y + innerH - (v / yMax) * innerH;
-        return `${i === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`;
-      })
-      .join(" ");
-  }
+  // y → SVG y 좌표
+  const sy = (v: number) => PAD_T + innerH - (v / yMax) * innerH;
 
-  // x축 라벨 — 4개 정도만 표시 (혼잡 방지)
-  const xTickStride = Math.max(1, Math.floor(labels.length / 5));
+  // y축 주 그리드 (5단위)
+  const majorTicks = Array.from({ length: yMax / 5 + 1 }, (_, i) => i * 5);
+  // y축 보조 그리드 (1단위, 주 그리드 제외)
+  const minorTicks = Array.from({ length: yMax + 1 }, (_, i) => i).filter((v) => v % 5 !== 0);
 
   return (
     <div className="rounded border border-border bg-card p-3">
-      <div className="mb-2 flex items-center justify-between">
-        <h3 className="text-sm font-bold">📊 컨텐츠 진행 히스토리 (최근 {days}일)</h3>
+      <div className="mb-2 flex items-center justify-between flex-wrap gap-2">
+        <h3 className="text-sm font-bold">📊 컨텐츠 진행 히스토리 (최근 7일)</h3>
         <div className="flex gap-3 text-xs">
           {RAIDS.map((r) => (
             <div key={r.key} className="flex items-center gap-1">
-              <span className="inline-block h-2 w-3 rounded" style={{ background: r.color }} />
-              <span className="text-muted-foreground">{RAID_NAME_KO[r.key]}</span>
+              <span className="inline-block h-2.5 w-3.5 rounded-sm" style={{ background: r.color }} />
+              <span className="text-muted-foreground">{r.name}</span>
             </div>
           ))}
         </div>
       </div>
+
       <svg viewBox={`0 0 ${W} ${H}`} className="w-full" preserveAspectRatio="xMidYMid meet">
-        {/* y축 그리드 */}
-        {[0, 0.25, 0.5, 0.75, 1].map((p) => {
-          const y = PAD_Y + innerH - p * innerH;
-          const v = Math.round(p * yMax * 10) / 10;
+        {/* ── 보조 그리드 (1단위, 연한) */}
+        {minorTicks.map((v) => {
+          const y = sy(v);
+          if (y < PAD_T || y > PAD_T + innerH + 0.5) return null;
           return (
-            <g key={p}>
-              <line x1={PAD_X} y1={y} x2={W - PAD_X} y2={y} stroke="currentColor" strokeOpacity={0.1} />
-              <text x={PAD_X - 4} y={y + 3} textAnchor="end" fontSize={10} fill="currentColor" opacity={0.6}>{v}</text>
+            <line
+              key={`minor-${v}`}
+              x1={PAD_L} y1={y} x2={W - PAD_R} y2={y}
+              stroke="currentColor" strokeOpacity={0.06} strokeWidth={0.5}
+            />
+          );
+        })}
+
+        {/* ── 주 그리드 (5단위) + y축 라벨 */}
+        {majorTicks.map((v) => {
+          const y = sy(v);
+          return (
+            <g key={`major-${v}`}>
+              <line
+                x1={PAD_L} y1={y} x2={W - PAD_R} y2={y}
+                stroke="currentColor" strokeOpacity={0.18} strokeWidth={0.8}
+              />
+              <text
+                x={PAD_L - 5} y={y + 3.5}
+                textAnchor="end" fontSize={9}
+                fill="currentColor" opacity={0.6}
+              >
+                {v}
+              </text>
             </g>
           );
         })}
-        {/* x축 라벨 */}
-        {labels.map((l, i) => {
-          if (i % xTickStride !== 0 && i !== labels.length - 1) return null;
-          const x = PAD_X + i * stepX;
+
+        {/* ── 막대 + x축 라벨 */}
+        {labels.map(({ wd, dd }, gi) => {
+          const gx = PAD_L + gi * groupW + GROUP_GAP / 2;
+          const cx = gx + barAreaW / 2;
           return (
-            <text key={i} x={x} y={H - 6} textAnchor="middle" fontSize={9} fill="currentColor" opacity={0.6}>
-              {l.slice(5)}
-            </text>
+            <g key={`g-${gi}`}>
+              {/* 그룹 막대 4개 */}
+              {RAIDS.map((r, bi) => {
+                const v = series[r.key][gi];
+                const bx = gx + bi * (barW + BAR_GAP);
+                const bh = (v / yMax) * innerH;
+                const by = sy(v);
+                return (
+                  <g key={r.key}>
+                    {v > 0 && (
+                      <rect
+                        x={bx} y={by}
+                        width={barW} height={bh}
+                        fill={r.color} fillOpacity={0.85}
+                        rx={1}
+                      />
+                    )}
+                    {/* 값 라벨 (막대 위, 1 이상) */}
+                    {v >= 1 && bh > 10 && (
+                      <text
+                        x={bx + barW / 2} y={by - 2}
+                        textAnchor="middle" fontSize={8}
+                        fill={r.color} opacity={0.9}
+                      >
+                        {v}
+                      </text>
+                    )}
+                  </g>
+                );
+              })}
+              {/* x축 요일 */}
+              <text x={cx} y={PAD_T + innerH + 14} textAnchor="middle" fontSize={11} fontWeight="bold" fill="currentColor" opacity={0.8}>
+                {wd}
+              </text>
+              {/* x축 일자 */}
+              <text x={cx} y={PAD_T + innerH + 28} textAnchor="middle" fontSize={9} fill="currentColor" opacity={0.5}>
+                {dd}
+              </text>
+            </g>
           );
         })}
-        {/* 라인 */}
-        {RAIDS.map((r) => (
-          <path
-            key={r.key}
-            d={ptPath(series[r.key])}
-            fill="none"
-            stroke={r.color}
-            strokeWidth={1.5}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        ))}
-        {/* 점 */}
-        {RAIDS.map((r) =>
-          series[r.key].map((v, i) => {
-            const x = PAD_X + i * stepX;
-            const y = PAD_Y + innerH - (v / yMax) * innerH;
-            return v > 0 ? <circle key={`${r.key}-${i}`} cx={x} cy={y} r={2} fill={r.color} /> : null;
-          })
-        )}
+
+        {/* x축 베이스라인 */}
+        <line
+          x1={PAD_L} y1={PAD_T + innerH}
+          x2={W - PAD_R} y2={PAD_T + innerH}
+          stroke="currentColor" strokeOpacity={0.2}
+        />
       </svg>
-      <p className="mt-2 text-xs text-muted-foreground">
-        * 캐릭터별 최근 50개 로그 통합. 보상 단독 진행은 0.5회로 가중.
+
+      <p className="mt-1 text-[10px] text-muted-foreground">
+        * 캐릭터별 최근 50개 로그 통합. 환급 제외, 1회 진행 = 1카운트.
       </p>
     </div>
   );

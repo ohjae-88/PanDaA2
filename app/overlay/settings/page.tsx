@@ -450,6 +450,11 @@ function BarrackSection() {
             min={1} max={10}
             onChange={(v) => patch({ collapsed: { ...cfg.collapsed, maxChars: v } })}
           />
+          <SwitchRow
+            label="최근 기록 카드 표시"
+            checked={cfg.collapsed.showRecentLog ?? true}
+            onChange={(v) => patch({ collapsed: { ...cfg.collapsed, showRecentLog: v } })}
+          />
           <CardStyleEditor card={card.collapsed} onChange={patchCollapsed} />
         </CollapsibleSection>
       </div>

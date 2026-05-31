@@ -3,6 +3,58 @@
 import { RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { CSSProperties } from "react";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { useSkillStore } from "@/lib/arcana/skill-store";
+import { SkillHoverTooltip } from "@/components/arcana/skill-hover-tooltip";
+
+/** 아이템 서브스킬 칩 — 마우스오버 시 아르카나 스킬 툴팁 표시 */
+function SkillChipWithTooltip({
+  name, level, icon, classId, compact,
+}: {
+  name: string; level: string | number; icon: string; classId: string; compact: boolean;
+}) {
+  const arcanaSkill = useSkillStore((s) => {
+    // 이름 일치 우선
+    return s.skills.find((x) => x.name === name) ?? null;
+  });
+
+  const chip = compact ? (
+    <div className="inline-flex items-center gap-2 px-2 py-1 rounded border bg-background/60 text-xs cursor-default">
+      {icon ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={icon} alt="" className="w-5 h-5 rounded flex-shrink-0" loading="lazy" />
+      ) : (
+        <span className="text-[14px]">✨</span>
+      )}
+      <span className="font-bold truncate flex-1">{name}</span>
+      {level ? <span className="text-[11px] text-gold-light font-bold flex-shrink-0">Lv.{level}</span> : null}
+    </div>
+  ) : (
+    <div className="flex items-center gap-1.5 text-[11px] cursor-default">
+      {icon ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={icon} alt="" className="w-3.5 h-3.5 rounded flex-shrink-0" loading="lazy" />
+      ) : (
+        <span className="text-[10px]">✨</span>
+      )}
+      <span className="font-bold">{name}</span>
+      {level ? <span className="text-muted-foreground">Lv.{level}</span> : null}
+    </div>
+  );
+
+  if (!arcanaSkill) return chip;
+
+  return (
+    <Tooltip delayDuration={150}>
+      <TooltipTrigger asChild>
+        {chip}
+      </TooltipTrigger>
+      <TooltipContent side="right" className="max-w-[440px] p-3 bg-card text-card-foreground border shadow-xl">
+        <SkillHoverTooltip skill={arcanaSkill} build={null} jobId={classId} />
+      </TooltipContent>
+    </Tooltip>
+  );
+}
 
 /** 아이템 등급 색상 — equip-dialog.tsx GRADE_HEX와 동일 정의 (V4.0.9 호환).
  *  마석/신석 옵션의 grade도 동일 색상 팔레트 적용. */
@@ -40,9 +92,11 @@ type Props = {
   error?: string | null;
   /** 아르카나용 컴팩트 모드 (subSkills만 칩으로 표시) */
   compact?: boolean;
+  /** 스킬 툴팁용 직업 ID (바텍 캐릭터 classId) */
+  classId?: string;
 };
 
-export function ItemDetailPanel({ data, loading, error, compact }: Props) {
+export function ItemDetailPanel({ data, loading, error, compact, classId = "" }: Props) {
   if (loading) {
     return (
       <div className="text-center py-3 text-xs text-muted-foreground">
@@ -75,16 +129,7 @@ export function ItemDetailPanel({ data, loading, error, compact }: Props) {
           const sicon = o?.icon ?? o?.iconUrl ?? "";
           if (!sname) return null;
           return (
-            <div key={i} className="inline-flex items-center gap-2 px-2 py-1 rounded border bg-background/60 text-xs">
-              {sicon ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={sicon} alt="" className="w-5 h-5 rounded flex-shrink-0" loading="lazy" />
-              ) : (
-                <span className="text-[14px]">✨</span>
-              )}
-              <span className="font-bold truncate flex-1">{sname}</span>
-              {slv ? <span className="text-[11px] text-gold-light font-bold flex-shrink-0">Lv.{slv}</span> : null}
-            </div>
+            <SkillChipWithTooltip key={i} name={sname} level={slv} icon={sicon} classId={classId} compact />
           );
         })}
       </div>
@@ -118,16 +163,7 @@ export function ItemDetailPanel({ data, loading, error, compact }: Props) {
               const sicon = o?.icon ?? o?.iconUrl ?? "";
               if (!sname) return null;
               return (
-                <div key={i} className="flex items-center gap-1.5 text-[11px]">
-                  {sicon ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={sicon} alt="" className="w-3.5 h-3.5 rounded flex-shrink-0" loading="lazy" />
-                  ) : (
-                    <span className="text-[10px]">✨</span>
-                  )}
-                  <span className="font-bold">{sname}</span>
-                  {slv ? <span className="text-muted-foreground">Lv.{slv}</span> : null}
-                </div>
+                <SkillChipWithTooltip key={i} name={sname} level={slv} icon={sicon} classId={classId} compact={false} />
               );
             })}
           </div>

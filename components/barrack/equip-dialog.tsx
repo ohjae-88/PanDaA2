@@ -23,6 +23,7 @@ import { skillLevelStyle } from "@/lib/arcana/skill-style";
 import type { SkillCategory } from "@/lib/arcana/types";
 import { useSkillStore } from "@/lib/arcana/skill-store";
 import { SPECIAL_EFFECT_LEVELS } from "@/lib/arcana/constants";
+import { SkillHoverTooltip } from "@/components/arcana/skill-hover-tooltip";
 
 /** 외부 도메인(파티 등)에서 직접 캐릭터 정보를 넘겨 장비 모달을 띄울 때 사용 */
 export type DirectCharInfo = {
@@ -465,6 +466,7 @@ export function EquipDialog({ open, charId, directChar, onClose, standalone }: P
                       detail={itemDetails[slotKey]}
                       onToggle={() => toggleRow(slotKey, bySlot[slotKey])}
                       onHover={() => ensureDetail(slotKey, bySlot[slotKey])}
+                      classId={barrackChar?.classId ?? ""}
                     />
                   ))}
                 </div>
@@ -475,7 +477,7 @@ export function EquipDialog({ open, charId, directChar, onClose, standalone }: P
             {skillAll.length > 0 && (
               <section className="rounded border bg-card/40 p-3">
                 <div className="text-xs font-bold text-muted-foreground mb-2">✨ 스킬 ({skillAll.length})</div>
-                <SkillGrid skills={skillAll} />
+                <SkillGrid skills={skillAll} classId={barrackChar?.classId ?? ""} />
               </section>
             )}
 
@@ -492,6 +494,7 @@ export function EquipDialog({ open, charId, directChar, onClose, standalone }: P
                       slotKey={slotKey}
                       item={bySlot[slotKey]}
                       detail={itemDetails[slotKey]}
+                      classId={barrackChar?.classId ?? ""}
                     />
                   ))}
                 </div>
@@ -567,8 +570,9 @@ type EquipRowProps = {
   detail?: { loading?: boolean; error?: string | null; data?: any };
   onToggle: () => void;
   onHover?: () => void;
+  classId?: string;
 };
-function EquipRow({ slotKey, item, expanded, detail, onToggle, onHover }: EquipRowProps) {
+function EquipRow({ slotKey, item, expanded, detail, onToggle, onHover, classId = "" }: EquipRowProps) {
   const slotLabel = SLOT_KO[slotKey] ?? slotKey;
   if (!item) {
     return (
@@ -642,12 +646,12 @@ function EquipRow({ slotKey, item, expanded, detail, onToggle, onHover }: EquipR
               </div>
             </div>
           </div>
-          <ItemDetailPanel data={detail?.data} loading={detail?.loading} error={detail?.error ?? null} />
+          <ItemDetailPanel data={detail?.data} loading={detail?.loading} error={detail?.error ?? null} classId={classId} />
         </TooltipContent>
       </Tooltip>
       {expanded && (
         <div className="border-t px-2 py-1.5">
-          <ItemDetailPanel data={detail?.data} loading={detail?.loading} error={detail?.error ?? null} />
+          <ItemDetailPanel data={detail?.data} loading={detail?.loading} error={detail?.error ?? null} classId={classId} />
         </div>
       )}
     </div>
@@ -655,7 +659,7 @@ function EquipRow({ slotKey, item, expanded, detail, onToggle, onHover }: EquipR
 }
 
 /** 아르카나 슬롯 — 좌: 큰 이미지+카드명 / 우: 옵션 수직 정렬 */
-function ArcanaRow({ slotKey, item, detail }: { slotKey: string; item: any; detail?: { loading?: boolean; error?: string | null; data?: any } }) {
+function ArcanaRow({ slotKey, item, detail, classId = "" }: { slotKey: string; item: any; detail?: { loading?: boolean; error?: string | null; data?: any }; classId?: string }) {
   const slotLabel = SLOT_KO[slotKey] ?? slotKey;
   if (!item) {
     return (
@@ -693,7 +697,7 @@ function ArcanaRow({ slotKey, item, detail }: { slotKey: string; item: any; deta
       </div>
       {/* 우측: 옵션(스킬) 수직 정렬 */}
       <div className="flex-1 min-w-0 border-l pl-3">
-        <ItemDetailPanel data={detail?.data} loading={detail?.loading} error={detail?.error ?? null} compact />
+        <ItemDetailPanel data={detail?.data} loading={detail?.loading} error={detail?.error ?? null} compact classId={classId} />
       </div>
     </div>
   );
@@ -747,7 +751,7 @@ function skillLv(s: any): number | null {
   return null;
 }
 
-function SkillGrid({ skills }: { skills: any[] }) {
+function SkillGrid({ skills, classId = "" }: { skills: any[]; classId?: string }) {
   const grouped: Record<string, any[]> = {};
   skills.forEach((s) => {
     const cat = s.category || "Other";
@@ -802,8 +806,8 @@ function SkillGrid({ skills }: { skills: any[] }) {
                       )}
                     </button>
                   </TooltipTrigger>
-                  <TooltipContent side="top" className="max-w-[320px] p-3 bg-card text-card-foreground border shadow-xl">
-                    <SkillTooltipContent skill={s} cat={cat} lv={lv} />
+                  <TooltipContent side="top" className="max-w-[440px] p-3 bg-card text-card-foreground border shadow-xl">
+                    <ArcanaSkillTooltipOrFallback apiSkill={s} cat={cat} lv={lv} classId={classId} />
                   </TooltipContent>
                 </Tooltip>
               );
@@ -834,6 +838,36 @@ function SkillGrid({ skills }: { skills: any[] }) {
     )}
     </>
   );
+}
+
+/**
+ * 장비창 스킬 툴팁 — 아르카나 Skill 찾으면 SkillHoverTooltip(✨ 스킬 카드와 동일),
+ * 없으면 기존 SkillTooltipContent로 폴백.
+ */
+function ArcanaSkillTooltipOrFallback({
+  apiSkill, cat, lv, classId,
+}: {
+  apiSkill: any;
+  cat: string;
+  lv: number | null;
+  classId: string;
+}) {
+  const arcanaSkill = useSkillStore((s) => {
+    const sid = Number(apiSkill.skillId ?? apiSkill.id);
+    if (Number.isFinite(sid)) {
+      const byId = s.skills.find((x) => x.skillId === sid);
+      if (byId) return byId;
+    }
+    return s.skills.find((x) => x.name === apiSkill.name) ?? null;
+  });
+
+  if (arcanaSkill) {
+    // 아르카나 SkillHoverTooltip (동일 UI). build=null → 카드/장비 분배 행 생략, 기본 레벨 표기.
+    return <SkillHoverTooltip skill={arcanaSkill} build={null} jobId={classId} />;
+  }
+
+  // arcana DB에 없는 스킬 — 기존 툴팁 폴백
+  return <SkillTooltipContent skill={apiSkill} cat={cat} lv={lv} />;
 }
 
 /** 스킬 카드 툴팁/팝업 내용 — 아이콘 + 이름 + Lv + 특화 효과 (액티브/스티그마).

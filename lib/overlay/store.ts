@@ -82,6 +82,8 @@ export type BarrackOverlayConfig = {
     enabled: boolean;
     /** 1~10 */
     maxChars: number;
+    /** 최근 기록 카드 표시 여부 */
+    showRecentLog: boolean;
   };
 };
 
@@ -273,7 +275,7 @@ const defaultBarrack: BarrackOverlayConfig = {
   selectedCharIds: [],
   selectedContentId: "expedition",
   expanded: {},
-  collapsed: { enabled: true, maxChars: 1 },
+  collapsed: { enabled: true, maxChars: 1, showRecentLog: true },
 };
 
 // 빌드 스냅샷 적용 (오버레이 통합 설정 기본값)
@@ -435,6 +437,10 @@ export const useOverlayStore = create<Store>()(
               typeof (oldBarrack.collapsed as { maxChars?: number } | undefined)?.maxChars === "number"
                 ? (oldBarrack.collapsed as { maxChars: number }).maxChars
                 : 1,
+            showRecentLog:
+              typeof (oldBarrack.collapsed as { showRecentLog?: boolean } | undefined)?.showRecentLog === "boolean"
+                ? (oldBarrack.collapsed as { showRecentLog: boolean }).showRecentLog
+                : true,
           },
         };
 

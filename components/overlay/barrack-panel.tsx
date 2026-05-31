@@ -5,7 +5,7 @@ import {
   ChevronLeft, ChevronRight, ChevronDown, Zap, Shirt, ExternalLink,
   Gift, Skull, RotateCw, Sword as SwordIcon, TrendingUp,
 } from "lucide-react";
-import { useBarrackStore, computeOdMax } from "@/lib/barrack/store";
+import { useBarrackStore, computeOdMax, sortCharacters } from "@/lib/barrack/store";
 import { useOverlayStore } from "@/lib/overlay/store";
 import { openEquipWindow } from "@/lib/overlay/equip-window";
 import { CLASSES } from "@/lib/barrack/constants";
@@ -40,14 +40,16 @@ function contentIdx(id: string): number {
 
 export function BarrackOverlayPanel({ collapsed }: { collapsed: boolean }) {
   const characters = useBarrackStore((s) => s.characters);
+  const characterOrder = useBarrackStore((s) => s.characterOrder);
   const accounts = useBarrackStore((s) => s.accounts);
   const db = useBarrackStore((s) => s.dbSettings);
   const cfg = useOverlayStore((s) => s.barrack);
   const patchCfg = useOverlayStore((s) => s.patchBarrack);
 
+  // 배럭관리와 동일한 순서 적용
   const visible = useMemo(
-    () => characters.filter((c) => !c.hidden),
-    [characters]
+    () => sortCharacters(characters, characterOrder).filter((c) => !c.hidden),
+    [characters, characterOrder]
   );
 
   // 선택된 캐릭터 자동 보정 (확장 모드 단일 + 축소 모드 첫번째)
@@ -117,7 +119,7 @@ export function BarrackOverlayPanel({ collapsed }: { collapsed: boolean }) {
 
     return (
       <div className="flex flex-col h-full text-xs">
-        <ContentSelector idx={idx} onCycle={cycleContent} />
+        <ContentSelector idx={idx} onCycle={cycleContent} onSelect={(id) => patchCfg({ selectedContentId: id })} />
         <div className="flex-1 overflow-auto divide-y divide-border/20 relative">
           {list.map((c, slotIdx) => (
             <CharCompactRow
@@ -127,6 +129,7 @@ export function BarrackOverlayPanel({ collapsed }: { collapsed: boolean }) {
               allChars={visible}
               visibleIds={visibleIds}
               isAnchor={false}
+              showRecentLog={cfg.collapsed.showRecentLog ?? true}
               onOdClick={() => setOdEditCharId(c.id)}
               onEquipClick={async () => {
                 const ok = await openEquipWindow(c.id);
@@ -185,7 +188,7 @@ export function BarrackOverlayPanel({ collapsed }: { collapsed: boolean }) {
             className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded border border-border/50 hover:bg-cat-arcana/10 hover:border-cat-arcana hover:text-cat-arcana text-[10px] font-bold"
             title="장비 · 스킬 — 신규 창"
           >
-            <Shirt className="h-3 w-3" /> 장비
+            <Shirt className="h-3 w-3" />
           </button>
           {(() => {
             const pu = charProfileUrl(selectedChar, db);
@@ -198,14 +201,14 @@ export function BarrackOverlayPanel({ collapsed }: { collapsed: boolean }) {
                 className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded border border-border/50 hover:bg-gold/10 hover:border-gold hover:text-gold text-[10px] font-bold"
                 title="아툴사이트 — 캐릭터 프로필"
               >
-                <ExternalLink className="h-3 w-3" /> 링크
+                <ExternalLink className="h-3 w-3" />
               </a>
             ) : (
               <span
                 className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded border border-border/30 text-[10px] font-bold opacity-30"
                 title="캐릭터 ID 미등록"
               >
-                <ExternalLink className="h-3 w-3" /> 링크
+                <ExternalLink className="h-3 w-3" />
               </span>
             );
           })()}
@@ -248,14 +251,14 @@ export function BarrackOverlayPanel({ collapsed }: { collapsed: boolean }) {
         <span className="text-[10px] text-muted-foreground tabular-nums">{runs}회분</span>
       </button>
 
-      <ContentSelector idx={idx} onCycle={cycleContent} />
+      <ContentSelector idx={idx} onCycle={cycleContent} onSelect={(id) => patchCfg({ selectedContentId: id })} />
 
       {/* 컨텐츠 본문 — 'etc'는 4종 카드, 나머지는 단일 콘텐츠 상세 */}
       <div className="flex-1 overflow-auto p-2">
         {safeContentId === "etc" ? (
           <FourContentCards char={selectedChar} />
         ) : (
-          <ContentBody char={selectedChar} contentId={safeContentId} />
+          <ContentBody char={selectedChar} contentId={safeContentId} showRecentLog={cfg.collapsed.showRecentLog ?? true} />
         )}
       </div>
 
@@ -276,9 +279,10 @@ export function BarrackOverlayPanel({ collapsed }: { collapsed: boolean }) {
 /* ============================================================
    컨텐츠 좌우 셀렉터 (공통)
    ============================================================ */
-function ContentSelector({ idx, onCycle }: { idx: number; onCycle: (d: -1 | 1) => void }) {
+function ContentSelector({ idx, onCycle, onSelect }: { idx: number; onCycle: (d: -1 | 1) => void; onSelect: (id: string) => void }) {
+  const [open, setOpen] = useState(false);
   return (
-    <div className="flex items-center border-b border-border/30 bg-background/10">
+    <div className="relative flex items-center border-b border-border/30 bg-background/10">
       <button
         onClick={() => onCycle(-1)}
         className="px-1.5 py-1 hover:bg-accent/20 transition-colors"
@@ -286,10 +290,15 @@ function ContentSelector({ idx, onCycle }: { idx: number; onCycle: (d: -1 | 1) =
       >
         <ChevronLeft className="h-3.5 w-3.5" />
       </button>
-      <div className="flex-1 flex items-center justify-center gap-1 py-1 font-bold">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="flex-1 flex items-center justify-center gap-1 py-1 font-bold hover:bg-accent/20 transition-colors"
+        title="컨텐츠 선택"
+      >
         <span className="text-sm">{OVERLAY_CONTENTS[idx].icon}</span>
         <span>{OVERLAY_CONTENTS[idx].name}</span>
-      </div>
+        <ChevronDown className={cn("h-3 w-3 opacity-50 transition-transform", open && "rotate-180")} />
+      </button>
       <button
         onClick={() => onCycle(1)}
         className="px-1.5 py-1 hover:bg-accent/20 transition-colors"
@@ -297,6 +306,26 @@ function ContentSelector({ idx, onCycle }: { idx: number; onCycle: (d: -1 | 1) =
       >
         <ChevronRight className="h-3.5 w-3.5" />
       </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
+          <div className="absolute left-0 right-0 top-full z-40 border border-border bg-background/95 backdrop-blur-sm shadow-lg rounded-b">
+            {OVERLAY_CONTENTS.map((c, i) => (
+              <button
+                key={c.id}
+                onClick={() => { onSelect(c.id); setOpen(false); }}
+                className={cn(
+                  "w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-accent/20 transition-colors",
+                  i === idx && "bg-cat-barrack/20 font-bold text-cat-barrack"
+                )}
+              >
+                <span>{c.icon}</span>
+                <span>{c.name}</span>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -307,13 +336,14 @@ function ContentSelector({ idx, onCycle }: { idx: number; onCycle: (d: -1 | 1) =
    - 기본 오드 막대바 + 추가오드/회분 라벨
    ============================================================ */
 function CharCompactRow({
-  char, contentId, allChars, visibleIds, isAnchor, onOdClick, onEquipClick, onSelectChar,
+  char, contentId, allChars, visibleIds, isAnchor, showRecentLog, onOdClick, onEquipClick, onSelectChar,
 }: {
   char: Character;
   contentId: string;
   allChars: Character[];
   visibleIds: Set<string>;
   isAnchor: boolean;
+  showRecentLog: boolean;
   onOdClick: () => void;
   onEquipClick: () => void;
   onSelectChar: (id: string) => void;
@@ -451,7 +481,7 @@ function CharCompactRow({
       {contentId === "etc" ? (
         <FourContentCards char={char} />
       ) : (
-        <ContentBody char={char} contentId={contentId} />
+        <ContentBody char={char} contentId={contentId} showRecentLog={showRecentLog} />
       )}
     </div>
   );
@@ -557,7 +587,7 @@ function FourContentCards({ char }: { char: Character }) {
   );
 }
 
-function ContentBody({ char, contentId }: { char: Character; contentId: string }) {
+function ContentBody({ char, contentId, showRecentLog = true }: { char: Character; contentId: string; showRecentLog?: boolean }) {
   const doRaid = useBarrackStore((s) => s.doRaid);
   const doMission = useBarrackStore((s) => s.doMission);
   const doAwakening = useBarrackStore((s) => s.doAwakening);
@@ -660,8 +690,8 @@ function ContentBody({ char, contentId }: { char: Character; contentId: string }
             onContextMenu={(e) => { e.preventDefault(); doRaid(char.id, raidKey, "boss", +1); }}
           />
         </div>
-        {/* 최근 변경 로그 1건 — 누적/1회/보스 행 아래 */}
-        <RecentLogRow char={char} />
+        {/* 최근 변경 로그 1건 — showRecentLog prop으로 제어 */}
+        {showRecentLog && <RecentLogRow char={char} />}
         <RaidEditDialog
           open={!!raidEditSection}
           charId={char.id}

@@ -30,6 +30,9 @@ export function SkillDbEditor() {
   const patchSkill = useSkillStore((s) => s.patchSkill);
   const addSkill = useSkillStore((s) => s.addSkill);
   const resetSeed = useSkillStore((s) => s.resetSeed);
+  const saveAsDefault = useSkillStore((s) => s.saveAsDefault);
+  const applyDefault = useSkillStore((s) => s.applyDefault);
+  const hasDefault = useSkillStore((s) => (s.defaultSnapshot?.length ?? 0) > 0);
   void addSkill;
 
   const [jobId, setJobId] = useState<string>("guardian");
@@ -84,6 +87,8 @@ export function SkillDbEditor() {
           specialEffects: sk.specialEffects,
         });
       }
+      // fetch 성공 시 현재 상태를 기본값 스냅샷으로 저장
+      saveAsDefault();
       const errPart = result.errors.length ? `  ⚠ 오류: ${result.errors.join(" / ")}` : "";
 
       if (result.newSkills.length > 0) {
@@ -179,9 +184,24 @@ export function SkillDbEditor() {
             setFetchStatus("✓ 시드 데이터로 초기화됨");
           }}
           className="text-amber-500 border border-amber-500/40"
-          title="모든 스킬을 시드 기본값으로 초기화"
+          title="모든 스킬을 하드코딩 시드 기본값으로 초기화"
         >
           시드 리셋
+        </Button>
+        <Button
+          size="sm"
+          variant="ghost"
+          disabled={fetching || !hasDefault}
+          onClick={async () => {
+            if (!hasDefault) { setFetchStatus("⚠ 저장된 기본값 없음 — 먼저 Inven 가져오기를 실행하세요."); return; }
+            if (!(await confirmDialog({ title: "기본값 적용", description: "Inven에서 가져온 기본값 데이터로 스킬 DB를 복원합니다.\n현재 편집 내용이 기본값으로 대체됩니다.", confirmText: "적용" }))) return;
+            applyDefault();
+            setFetchStatus("✓ 기본값 데이터 적용됨");
+          }}
+          className="text-cat-arcana border border-cat-arcana/40"
+          title={hasDefault ? "Inven 가져오기로 저장된 기본값으로 복원" : "기본값 없음 — 먼저 Inven 가져오기 실행 필요"}
+        >
+          기본값 적용
         </Button>
         <span className={cn("text-[11px] italic flex-1", fetchStatus.startsWith("⚠") ? "text-rose-400" : "text-muted-foreground")}>
           {fetchStatus}
